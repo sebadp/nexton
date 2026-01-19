@@ -4,6 +4,24 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Virtual environments
 nexton/
@@ -11,6 +29,12 @@ venv/
 env/
 ENV/
 .venv
+env.bak/
+venv.bak/
+
+# Poetry
+poetry.lock
+.poetry/
 
 # IDEs
 .idea/
@@ -19,46 +43,117 @@ ENV/
 *.swo
 *~
 .DS_Store
-
-# PyCharm
 *.iml
-.idea/
-
-# Environment variables
-.env
-.env.local
-.env.*.local
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.cache
 
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-*.egg
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linting
+.ruff_cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # Logs
 *.log
 logs/
+log.txt
 
 # Database
 *.db
 *.sqlite3
+*.sql
 
-# AWS / Terraform (por si usás infra as code)
-.terraform/
-*.tfstate
-*.tfstate.backup
+# Data
+data/
+backups/
+*.csv
+*.json
+!config/*.json
+!tests/**/*.json
+
+# Docker
+docker-compose.override.yml
+
+# Prometheus
+/tmp/prometheus/
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
+*.ipynb
+
+# AWS / Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Redis
+dump.rdb
+
+# Ollama
+.ollama/
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.crt
+credentials.json
+
+# Documentation builds
+site/
+docs/_build/
+
+# Monitoring data
+grafana/data/
+prometheus/data/
+loki/data/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Node (if using frontend)
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Build artifacts
+*.whl
+*.tar.gz
 

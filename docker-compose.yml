@@ -1,0 +1,399 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # DATA LAYER
+  # ==========================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: linkedin-agent-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      POSTGRES_DB: ${POSTGRES_DB:-linkedin_agent}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/scripts:/docker-entrypoint-initdb.d
+    networks:
+      - linkedin-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-linkedin_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: linkedin-agent-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - linkedin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ==========================================
+  # AI/ML LAYER
+  # ==========================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: linkedin-agent-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - linkedin-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Uncomment if you have NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================
+  # APPLICATION LAYER
+  # ==========================================
+
+  app:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    container_name: linkedin-agent-app
+    ports:
+      - "8000:8000"
+    environment:
+      # Application
+      - ENV=${ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+
+      # Ollama
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+
+      # LLM Settings
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-500}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
+
+      # Paths
+      - PROFILE_PATH=/app/config/profile.yaml
+    volumes:
+      # Mount code for development (comment out in production)
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./alembic.ini:/app/alembic.ini
+      # Logs
+      - ./logs:/app/logs
+    networks:
+      - linkedin-network
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ==========================================
+  # SCRAPER SERVICE
+  # ==========================================
+
+  scraper:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.playwright
+    container_name: linkedin-agent-scraper
+    environment:
+      # Application
+      - ENV=${ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # LinkedIn Credentials
+      - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
+      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+
+      # Ollama
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+
+      # Scraper Settings
+      - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
+      - SCRAPER_MAX_REQUESTS_PER_MINUTE=${SCRAPER_MAX_REQUESTS_PER_MINUTE:-10}
+      - SCRAPER_MIN_DELAY_SECONDS=${SCRAPER_MIN_DELAY_SECONDS:-3.0}
+
+      # Paths
+      - PROFILE_PATH=/app/config/profile.yaml
+      - COOKIES_PATH=/app/data/cookies.json
+    volumes:
+      # Mount code for development (comment out in production)
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./scripts:/app/scripts
+      # Data persistence
+      - scraper_data:/app/data
+      # Logs
+      - ./logs:/app/logs
+    networks:
+      - linkedin-network
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+      app:
+        condition: service_started
+    # Restart policy: only restart on failure
+    # This prevents infinite restarts if LinkedIn blocks us
+    restart: on-failure
+    # Resource limits to prevent memory issues
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # ==========================================
+  # CELERY WORKERS & SCHEDULER
+  # ==========================================
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    container_name: linkedin-agent-celery-worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      # Application
+      - ENV=${ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
+
+      # Redis / Celery
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-4}
+
+      # Ollama
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+
+      # LinkedIn Credentials (for scraping tasks)
+      - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
+      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+
+      # Scraper Settings
+      - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
+      - SCRAPER_MAX_REQUESTS_PER_MINUTE=${SCRAPER_MAX_REQUESTS_PER_MINUTE:-10}
+      - SCRAPER_MIN_DELAY_SECONDS=${SCRAPER_MIN_DELAY_SECONDS:-3.0}
+
+      # Paths
+      - PROFILE_PATH=/app/config/profile.yaml
+    volumes:
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+    networks:
+      - linkedin-network
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    container_name: linkedin-agent-celery-beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    environment:
+      # Application
+      - ENV=${ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
+
+      # Redis / Celery
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+      # Paths
+      - PROFILE_PATH=/app/config/profile.yaml
+    volumes:
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+    networks:
+      - linkedin-network
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    container_name: linkedin-agent-flower
+    command: celery -A app.tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      # Redis / Celery
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+      # Flower auth (optional)
+      - FLOWER_BASIC_AUTH=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    volumes:
+      - ./app:/app/app
+    networks:
+      - linkedin-network
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ==========================================
+  # MONITORING STACK
+  # ==========================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: linkedin-agent-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    networks:
+      - linkedin-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: linkedin-agent-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - linkedin-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: linkedin-agent-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP
+    networks:
+      - linkedin-network
+    restart: unless-stopped
+
+# ==========================================
+# NETWORKS
+# ==========================================
+
+networks:
+  linkedin-network:
+    driver: bridge
+    name: linkedin-network
+
+# ==========================================
+# VOLUMES
+# ==========================================
+
+volumes:
+  postgres_data:
+    name: linkedin_agent_postgres_data
+  redis_data:
+    name: linkedin_agent_redis_data
+  ollama_data:
+    name: linkedin_agent_ollama_data
+  scraper_data:
+    name: linkedin_agent_scraper_data
+  prometheus_data:
+    name: linkedin_agent_prometheus_data
+  grafana_data:
+    name: linkedin_agent_grafana_data

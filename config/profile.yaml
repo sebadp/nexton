@@ -1,0 +1,71 @@
+# Candidate Profile Configuration
+# Edit this file with your preferences and requirements
+
+# Personal Information
+name: "Sebastián Dávila"
+
+# Skills and Experience
+preferred_technologies:
+  # Backend
+  - Python
+  - FastAPI
+  - Django
+  - Flask
+  # Databases
+  - PostgreSQL
+  - MongoDB
+  - Redis
+  # AI/ML
+  - LangChain
+  - DSPy
+  - OpenAI
+  - Anthropic
+  # DevOps
+  - Docker
+  - Kubernetes
+  - AWS
+  - GCP
+  # Other
+  - Git
+  - Linux
+
+years_of_experience: 5
+current_seniority: "Senior"  # Options: Junior, Mid, Senior, Staff, Principal
+
+# Compensation Expectations (in USD)
+minimum_salary_usd: 80000  # Minimum acceptable annual salary
+ideal_salary_usd: 120000   # Ideal annual salary
+
+# Work Preferences
+preferred_remote_policy: "Remote"  # Options: Remote, Hybrid, Flexible
+preferred_locations:
+  - "Remote"
+  - "Argentina"
+
+# Company Preferences
+preferred_company_size: "Mid-size"  # Options: Startup, Mid-size, Enterprise
+industry_preferences:
+  - "Technology"
+  - "AI/ML"
+  - "SaaS"
+  - "Fintech"
+  - "E-commerce"
+
+# Additional Context
+open_to_relocation: false
+looking_for_change: true
+
+notes: |
+  Currently focused on AI/ML opportunities, only
+  interested in 4 days of work week. If not mentioned this politelly reject.
+
+  Prefer companies with:
+  - Strong engineering culture
+  - Remote-first mindset
+  - Modern tech stack
+  - Clear growth path
+
+  Not interested in:
+  - Agencies/consulting
+  - Cryptocurrency/blockchain only roles
+  - Early-stage startups (pre-seed)
