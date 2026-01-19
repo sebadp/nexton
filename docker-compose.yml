@@ -107,6 +107,21 @@ services:
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-500}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
 
+      # SMTP Configuration (Mailpit for development)
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-false}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@linkedin-agent.local}
+
+      # Notification Configuration
+      - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-user@example.com}
+      - NOTIFICATION_ENABLED=${NOTIFICATION_ENABLED:-true}
+      - NOTIFICATION_TIER_THRESHOLD=${NOTIFICATION_TIER_THRESHOLD:-["HIGH_PRIORITY","INTERESANTE"]}
+      - NOTIFICATION_SCORE_THRESHOLD=${NOTIFICATION_SCORE_THRESHOLD:-0}
+      - NOTIFICATION_INCLUDE_RESPONSE=${NOTIFICATION_INCLUDE_RESPONSE:-true}
+
       # Paths
       - PROFILE_PATH=/app/config/profile.yaml
     volumes:
@@ -124,6 +139,8 @@ services:
       redis:
         condition: service_started
       ollama:
+        condition: service_started
+      mailpit:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -239,6 +256,21 @@ services:
       - SCRAPER_MAX_REQUESTS_PER_MINUTE=${SCRAPER_MAX_REQUESTS_PER_MINUTE:-10}
       - SCRAPER_MIN_DELAY_SECONDS=${SCRAPER_MIN_DELAY_SECONDS:-3.0}
 
+      # SMTP Configuration (Mailpit for development)
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-false}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@linkedin-agent.local}
+
+      # Notification Configuration
+      - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-user@example.com}
+      - NOTIFICATION_ENABLED=${NOTIFICATION_ENABLED:-true}
+      - NOTIFICATION_TIER_THRESHOLD=${NOTIFICATION_TIER_THRESHOLD:-["HIGH_PRIORITY","INTERESANTE"]}
+      - NOTIFICATION_SCORE_THRESHOLD=${NOTIFICATION_SCORE_THRESHOLD:-0}
+      - NOTIFICATION_INCLUDE_RESPONSE=${NOTIFICATION_INCLUDE_RESPONSE:-true}
+
       # Paths
       - PROFILE_PATH=/app/config/profile.yaml
     volumes:
@@ -253,6 +285,8 @@ services:
       redis:
         condition: service_started
       ollama:
+        condition: service_started
+      mailpit:
         condition: service_started
     restart: unless-stopped
     # Resource limits
@@ -319,6 +353,20 @@ services:
     depends_on:
       redis:
         condition: service_started
+    restart: unless-stopped
+
+  # ==========================================
+  # EMAIL (Development)
+  # ==========================================
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: linkedin-agent-mailpit
+    ports:
+      - "8025:8025"  # Web UI
+      - "1025:1025"  # SMTP
+    networks:
+      - linkedin-network
     restart: unless-stopped
 
   # ==========================================

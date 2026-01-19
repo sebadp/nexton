@@ -28,7 +28,7 @@ class EmailClient:
         smtp_username: Optional[str] = None,
         smtp_password: Optional[str] = None,
         from_email: Optional[str] = None,
-        use_tls: bool = True,
+        use_tls: Optional[bool] = None,
     ):
         """
         Initialize email client.
@@ -46,7 +46,7 @@ class EmailClient:
         self.smtp_username = smtp_username or settings.SMTP_USERNAME
         self.smtp_password = smtp_password or settings.SMTP_PASSWORD
         self.from_email = from_email or settings.SMTP_FROM_EMAIL
-        self.use_tls = use_tls
+        self.use_tls = use_tls if use_tls is not None else settings.SMTP_USE_TLS
 
         # Validate configuration
         if not all([self.smtp_host, self.smtp_port, self.from_email]):

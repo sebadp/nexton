@@ -34,6 +34,7 @@ class ResponseGenerator(dspy.Module):
         extracted: ExtractedData,
         scoring: ScoringResult,
         candidate_name: str = "Sebastián",
+        profile: dict = None,
     ) -> str:
         """
         Generate a response to the recruiter.
@@ -43,6 +44,7 @@ class ResponseGenerator(dspy.Module):
             extracted: Extracted job data
             scoring: Scoring results
             candidate_name: Candidate's name
+            profile: Candidate's profile including job_search_status
 
         Returns:
             str: Generated response text
@@ -54,6 +56,7 @@ class ResponseGenerator(dspy.Module):
                 extracted=data,
                 scoring=scores,
                 candidate_name="Juan",
+                profile=profile_dict,
             )
         """
         logger.debug(
@@ -74,6 +77,9 @@ class ResponseGenerator(dspy.Module):
             else:
                 salary_range = "Not mentioned"
 
+            # Build candidate context from profile
+            candidate_context = self._build_candidate_context(profile)
+
             # Generate response
             prediction = self.generate(
                 recruiter_name=recruiter_name,
@@ -84,6 +90,7 @@ class ResponseGenerator(dspy.Module):
                 salary_range=salary_range,
                 tech_stack=", ".join(extracted.tech_stack[:5]),  # Max 5 techs
                 candidate_name=candidate_name,
+                candidate_context=candidate_context,
             )
 
             response = prediction.response.strip()
@@ -128,6 +135,72 @@ class ResponseGenerator(dspy.Module):
                 scoring,
                 candidate_name,
             )
+
+    def _build_candidate_context(self, profile: dict = None) -> str:
+        """
+        Build candidate context string from profile.
+
+        Args:
+            profile: Candidate's profile dictionary
+
+        Returns:
+            str: Formatted context for the LLM
+        """
+        if not profile:
+            return "Candidate is open to opportunities."
+
+        context_parts = []
+
+        # Job search status
+        job_status = profile.get("job_search_status", {})
+
+        if job_status:
+            # Current situation
+            situation = job_status.get("situation", "").strip()
+            if situation:
+                context_parts.append(f"Current situation: {situation}")
+
+            # Urgency level
+            urgency = job_status.get("urgency", "selective")
+            actively_looking = job_status.get("actively_looking", False)
+
+            if urgency == "urgent":
+                context_parts.append("Actively seeking new opportunities urgently.")
+            elif urgency == "moderate" and actively_looking:
+                context_parts.append("Actively looking for the right opportunity.")
+            elif urgency == "selective":
+                context_parts.append("Open to exceptional opportunities that meet specific criteria.")
+            else:
+                context_parts.append("Currently not looking, but open to outstanding opportunities.")
+
+            # Must-have requirements
+            must_haves = job_status.get("must_have", [])
+            if must_haves:
+                context_parts.append(
+                    "MUST-HAVE requirements (deal-breakers): " + ", ".join(must_haves)
+                )
+
+            # Nice to have
+            nice_to_haves = job_status.get("nice_to_have", [])
+            if nice_to_haves:
+                context_parts.append(
+                    "Nice to have: " + ", ".join(nice_to_haves[:3])  # Limit to 3
+                )
+
+            # Automatic rejection criteria
+            reject_if = job_status.get("reject_if", [])
+            if reject_if:
+                context_parts.append(
+                    "Will automatically decline: " + ", ".join(reject_if[:3])
+                )
+
+        # Additional preferences
+        if profile.get("looking_for_change"):
+            context_parts.append("Open to changing jobs.")
+        else:
+            context_parts.append("Happy in current role, only interested in exceptional opportunities.")
+
+        return " ".join(context_parts)
 
     def _fallback_response(
         self,

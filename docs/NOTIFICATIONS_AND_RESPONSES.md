@@ -10,10 +10,12 @@
 
 Sistema completo de notificaciones por email y respuestas automáticas para oportunidades de LinkedIn:
 
-- **Email Notifications** - Notificaciones HTML por email cuando llegan oportunidades relevantes
-- **AI Response Suggestions** - Respuestas generadas automáticamente por IA incluidas en el email
+- **Daily Scraping** - LinkedIn se escanea una vez al día a las 9 AM
+- **Daily Summary Email** - UN email con TODAS las oportunidades nuevas del día
+- **AI Response Suggestions** - Respuestas personalizadas según tu situación profesional (job_search_status)
 - **User Approval Workflow** - Revisar, editar o rechazar respuestas antes de enviar
 - **Automated LinkedIn Sending** - Envío automático de respuestas aprobadas a LinkedIn
+- **Mailpit Integration** - En desarrollo, los emails se capturan en Mailpit (http://localhost:8025)
 
 ---
 
@@ -41,57 +43,40 @@ Sistema completo de notificaciones por email y respuestas automáticas para opor
 ## Architecture
 
 ```
-┌─────────────────────┐
-│  LinkedIn Message   │
-│    (New Inquiry)    │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   DSPy Pipeline     │
-│  - Extract info     │
-│  - Score opportunity│
-│  - Generate response│
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Create Opportunity │
-│  + PendingResponse  │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Send Email Notif   │
-│  with AI response   │
-│  + Action buttons   │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   User Reviews      │
-│  (Email buttons)    │
-└─┬─────────┬─────┬───┘
-  │         │     │
-  │Approve  │Edit │Decline
-  │         │     │
-  ▼         ▼     ▼
-┌─────────────────────┐
-│   API Endpoint      │
-│  Update status      │
-└──────────┬──────────┘
-           │
-           ▼ (if approved)
-┌─────────────────────┐
-│   Celery Task       │
-│  Queue message send │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  LinkedIn Messenger │
-│  Send via Playwright│
-└─────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   DAILY AT 9 AM (Celery Beat)               │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Scrape LinkedIn Messages (unread only)                     │
+│  ─────────────────────────────────────                      │
+│  For EACH message:                                          │
+│    1. Extract info (company, role, salary, tech stack)      │
+│    2. Score opportunity (0-100)                             │
+│    3. Classify tier (HIGH_PRIORITY, INTERESANTE, etc.)      │
+│    4. Generate AI response (based on job_search_status)     │
+│    5. Store in PostgreSQL                                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Send ONE Daily Summary Email                               │
+│  ─────────────────────────────                              │
+│  - All opportunities in one email                           │
+│  - Each with AI-generated response                          │
+│  - Action buttons: Approve / Edit / Decline                 │
+│  - In dev: captured by Mailpit (localhost:8025)             │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  User Reviews (via email links or API)                      │
+│  ─────────────────────────────────────                      │
+│  ├── Approve → Queue Celery task → Send to LinkedIn         │
+│  ├── Edit → Modify response → Then approve                  │
+│  └── Decline → Mark as declined (no message sent)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -159,9 +159,10 @@ def scrape_linkedin_messages(
 )
 def scrape_unread_messages(self) -> Dict:
     """
-    Scrape only unread messages (periodic task).
+    Scrape only unread messages (utility task).
 
-    This task is scheduled to run every 15 minutes via Celery Beat.
+    This task can be called manually. For scheduled scraping,
+    use scrape_and_send_daily_summary which runs daily at 9 AM.
 
     Returns:
         Dictionary with scraping results
@@ -199,19 +200,44 @@ def scrape_and_send_daily_summary(self) -> Dict:
 
     logger.info("daily_scraping_started", task_id=self.request.id)
 
-    # 1. Scrape unread messages
-    scrape_result = scrape_linkedin_messages(limit=50, unread_only=True)
+    # 1. Scrape unread messages and process them
+    async def scrape_and_process_messages():
+        # Get credentials from environment
+        email = os.getenv("LINKEDIN_EMAIL")
+        password = os.getenv("LINKEDIN_PASSWORD")
 
-    if scrape_result["status"] != "success" or scrape_result["messages_found"] == 0:
-        logger.info("no_new_messages", result=scrape_result)
-        return {
-            "status": "no_new_messages",
-            "messages_found": 0,
-            "opportunities_created": 0,
-        }
+        if not email or not password:
+            raise ScraperError(
+                message="LinkedIn credentials not configured",
+                details={"missing": "LINKEDIN_EMAIL or LINKEDIN_PASSWORD"},
+            )
 
-    # 2. Process messages and create opportunities
-    async def process_all_messages():
+        # Create scraper config
+        from app.scraper import LinkedInScraper, ScraperConfig
+        config = ScraperConfig(
+            email=email,
+            password=password,
+            headless=os.getenv("SCRAPER_HEADLESS", "true").lower() == "true",
+            max_requests_per_minute=int(
+                os.getenv("SCRAPER_MAX_REQUESTS_PER_MINUTE", "10")
+            ),
+            min_delay_seconds=float(os.getenv("SCRAPER_MIN_DELAY_SECONDS", "3.0")),
+        )
+
+        # Scrape messages
+        async with LinkedInScraper(config) as scraper:
+            messages = await scraper.scrape_messages(limit=50, unread_only=True)
+
+        logger.info(
+            "messages_scraped",
+            task_id=self.request.id,
+            message_count=len(messages),
+        )
+
+        if not messages:
+            return []
+
+        # Process each message through pipeline and create opportunities
         async with AsyncSessionLocal() as session:
             repo = OpportunityRepository(session)
             pipeline = get_pipeline()
@@ -219,19 +245,19 @@ def scrape_and_send_daily_summary(self) -> Dict:
 
             opportunities = []
 
-            for msg in scrape_result.get("messages", []):
+            for msg in messages:
                 try:
                     # Process through pipeline
                     result = pipeline.forward(
-                        message=msg["message"],
-                        recruiter_name=msg["from"],
+                        message=msg.message_text,
+                        recruiter_name=msg.sender_name,
                         profile=profile,
                     )
 
                     # Create opportunity
                     opportunity = await repo.create(
                         recruiter_name=result.recruiter_name,
-                        raw_message=msg["message"],
+                        raw_message=msg.message_text,
                         company=result.extracted.company,
                         role=result.extracted.role,
                         seniority=result.extracted.seniority,
@@ -263,13 +289,31 @@ def scrape_and_send_daily_summary(self) -> Dict:
                     )
 
                 except Exception as e:
-                    logger.error("failed_to_process_message", error=str(e), message=msg)
+                    logger.error("failed_to_process_message", error=str(e), sender=msg.sender_name)
                     await session.rollback()
                     continue
 
             return opportunities
 
-    opportunities = asyncio.run(process_all_messages())
+    try:
+        opportunities = asyncio.run(scrape_and_process_messages())
+    except Exception as e:
+        logger.error("scraping_and_processing_failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+            "messages_found": 0,
+            "opportunities_created": 0,
+        }
+
+    # Check if any opportunities were created
+    if not opportunities:
+        logger.info("no_new_messages")
+        return {
+            "status": "no_new_messages",
+            "messages_found": 0,
+            "opportunities_created": 0,
+        }
 
     # 3. Send ONE summary email with all opportunities
     if opportunities:
@@ -289,7 +333,7 @@ def scrape_and_send_daily_summary(self) -> Dict:
 
     return {
         "status": "success",
-        "messages_found": scrape_result["messages_found"],
+        "messages_found": len(opportunities),
         "opportunities_created": len(opportunities),
         "summary_sent": len(opportunities) > 0,
     }

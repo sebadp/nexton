@@ -766,9 +766,8 @@ celery -A app.tasks.celery_app purge
 ```
 
 **Periodic tasks:**
-- Scraping: Every 15 minutes (`scrape_unread_messages`)
+- Daily scraping & summary: Daily at 9 AM (`scrape_and_send_daily_summary`)
 - Cleanup: Daily at 2 AM (`cleanup_old_opportunities`)
-- Health check: Every 5 minutes (`health_check`)
 
 ### Docker Services
 

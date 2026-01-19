@@ -88,11 +88,17 @@ class OpportunityPipeline(dspy.Module):
 
             # Step 3: Generate response
             logger.debug("pipeline_step", step="generate_response")
+
+            # Get full profile dict (includes job_search_status)
+            from app.dspy_modules.profile_loader import get_profile_dict
+            profile_dict = get_profile_dict()
+
             response = self.generator(
                 recruiter_name=recruiter_name,
                 extracted=extracted,
                 scoring=scoring,
                 candidate_name=profile.name,
+                profile=profile_dict,
             )
 
             # Calculate processing time

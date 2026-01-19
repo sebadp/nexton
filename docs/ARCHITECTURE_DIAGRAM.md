@@ -101,33 +101,31 @@ sequenceDiagram
     participant R as Redis
     participant E as Email
 
-    Note over L,S: Step 1: Scraping (Every 15 min)
-    C->>S: Trigger scrape_messages task
-    S->>L: Login & fetch messages
+    Note over L,S: Step 1: Daily Scraping (9 AM)
+    C->>S: Trigger scrape_and_send_daily_summary task
+    S->>L: Login & fetch unread messages
     L-->>S: Return messages
-    S->>C: Queue analysis tasks
 
-    Note over C,DB: Step 2: Analysis
+    Note over C,DB: Step 2: Analysis (for each message)
     C->>R: Check cache
     alt Cache Hit
         R-->>C: Return cached analysis
     else Cache Miss
         C->>D: Analyze message
         D->>D: Extract info, score, classify
-        D-->>C: Return analysis
+        D->>D: Generate response (based on profile)
+        D-->>C: Return analysis + response
         C->>R: Cache result
     end
-    C->>DB: Store opportunity
+    C->>DB: Store opportunity with AI response
 
-    Note over C,E: Step 3: Notification
-    alt High Priority (A/B tier)
-        C->>D: Generate response
-        D-->>C: AI response
-        C->>E: Send email notification
-        E-->>U: Email with opportunity
+    Note over C,E: Step 3: Daily Summary Email
+    alt Has new opportunities
+        C->>E: Send ONE summary email with ALL opportunities
+        E-->>U: Daily summary with all opportunities + AI responses
     end
 
-    Note over U,L: Step 4: Review & Send
+    Note over U,L: Step 4: Review & Send (via API or email links)
     U->>API: Approve response
     API->>C: Queue send_message task
     C->>S: Send via Playwright

@@ -72,11 +72,11 @@ Job searching on LinkedIn is time-consuming:
 
 **LinkedIn AI Agent** is an intelligent automation system that:
 
-1. **📥 Scrapes** your LinkedIn messages automatically
+1. **📥 Scrapes** your LinkedIn messages once daily (9 AM)
 2. **🧠 Analyzes** each opportunity using AI (DSPy + LLM)
 3. **📊 Scores** opportunities based on your preferences (tech stack, salary, location)
-4. **✍️ Generates** personalized responses in your tone
-5. **📧 Notifies** you via email for high-priority opportunities
+4. **✍️ Generates** personalized responses adapted to your professional situation
+5. **📧 Sends** ONE daily summary email with all new opportunities
 6. **🚀 Sends** approved responses back to LinkedIn
 
 All running on **your infrastructure** with **full observability** and **production-grade reliability**.
@@ -96,21 +96,29 @@ All running on **your infrastructure** with **full observability** and **product
 ### 🔄 Complete Automation Workflow
 
 ```
-LinkedIn Message → Scraper → AI Analysis → Score & Tier → Generate Response
-                                                ↓
-                                    Notify if High Priority
-                                                ↓
-                                    Review → Approve → Send
+Daily at 9 AM:
+┌─────────────────────────────────────────────────────────────────┐
+│  LinkedIn Messages → Scraper → AI Analysis → Score & Tier      │
+│         ↓                                                       │
+│  Generate Personalized Response (based on your job status)     │
+│         ↓                                                       │
+│  Store in Database                                              │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+              ONE Daily Summary Email with ALL opportunities
+                              ↓
+              Review → Edit → Approve → Send to LinkedIn
 ```
 
 ### 🎛️ Production-Ready Features
 
 | Feature | Description |
 |---------|-------------|
-| **Automated Scraping** | Playwright-based LinkedIn scraper with session persistence |
+| **Daily Scraping** | Playwright-based LinkedIn scraper runs once daily at 9 AM |
 | **Smart Caching** | Redis-based multi-layer caching reduces LLM calls by 60% |
-| **Background Jobs** | Celery task queue for async processing and scheduling |
-| **Email Notifications** | Beautiful HTML emails for high-priority opportunities |
+| **Background Jobs** | Celery Beat schedules daily scraping and cleanup tasks |
+| **Daily Summary Email** | ONE beautiful HTML email with all new opportunities |
+| **Mailpit Integration** | Local email testing in development (catches all emails) |
 | **Response Workflow** | Review, edit, approve, and send responses via REST API |
 | **Rate Limiting** | Respects LinkedIn limits to avoid account restrictions |
 | **Session Management** | Persistent cookies for reliable long-term operation |
@@ -190,13 +198,14 @@ Track everything:
 
 ### Data Flow
 
-1. **Scraping**: Playwright scrapes LinkedIn messages every 15 minutes
-2. **Analysis**: DSPy pipeline analyzes message → extracts info → scores → classifies tier
-3. **Caching**: Results cached in Redis (60% cache hit rate)
-4. **Storage**: Opportunities stored in PostgreSQL
-5. **Notification**: Email sent for A/B tier opportunities
-6. **Response**: User reviews/approves → Response sent back to LinkedIn
-7. **Monitoring**: All operations tracked with metrics, traces, and logs
+1. **Daily Scraping**: Celery Beat triggers scraping at 9 AM daily
+2. **Analysis**: DSPy pipeline analyzes each message → extracts info → scores → classifies tier
+3. **Response Generation**: AI generates personalized response based on your professional status
+4. **Storage**: All opportunities stored in PostgreSQL with their AI responses
+5. **Daily Summary**: ONE email sent with ALL new opportunities (uses Mailpit in development)
+6. **User Action**: Review responses in email → Approve/Edit/Decline via API
+7. **Send**: Approved responses sent back to LinkedIn
+8. **Monitoring**: All operations tracked with metrics, traces, and logs
 
 ---
 
@@ -259,11 +268,11 @@ curl http://localhost:8000/health
 ```
 
 **That's it!** The system is now:
-- ✅ Scraping LinkedIn every 15 minutes
-- ✅ Analyzing opportunities with AI
+- ✅ Scheduled to scrape LinkedIn daily at 9 AM
+- ✅ Analyzing opportunities with AI (considering your professional status)
 - ✅ Caching results in Redis
-- ✅ Sending email notifications
-- ✅ Ready to generate responses
+- ✅ Sending ONE daily summary email (view at http://localhost:8025 in dev)
+- ✅ Ready to generate personalized responses
 
 ### Option 2: Local Development
 
@@ -366,6 +375,7 @@ Once the system is running, access these dashboards:
 | Service | URL | Credentials | Purpose |
 |---------|-----|-------------|---------|
 | **API Docs** | http://localhost:8000/docs | - | Interactive API testing |
+| **Mailpit** | http://localhost:8025 | - | View daily summary emails (dev) |
 | **Grafana** | http://localhost:3000 | admin/admin | Metrics dashboards |
 | **Prometheus** | http://localhost:9090 | - | Raw metrics queries |
 | **Jaeger** | http://localhost:16686 | - | Request tracing |
@@ -461,11 +471,21 @@ RESPONSE_LLM_PROVIDER=openai
 RESPONSE_LLM_MODEL=gpt-4-turbo
 
 # === Email Notifications ===
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-NOTIFICATION_EMAIL=notifications@example.com
+# Development: Use Mailpit (local email catcher)
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USE_TLS=false
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=noreply@linkedin-agent.local
+NOTIFICATION_EMAIL=you@example.com
+
+# Production: Use real SMTP (Gmail, SendGrid, etc.)
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USE_TLS=true
+# SMTP_USERNAME=your_email@gmail.com
+# SMTP_PASSWORD=your_app_password
 
 # Only notify for these tiers
 NOTIFICATION_TIER_THRESHOLD=["A", "B"]
@@ -518,6 +538,88 @@ industry_preferences:
   - "AI/ML"
   - "SaaS"
 ```
+
+### Professional Status & AI Response Personalization
+
+The system adapts AI-generated responses based on your current professional situation. Configure the `job_search_status` section to personalize how responses are generated:
+
+```yaml
+# Professional Status (used for AI response generation)
+job_search_status:
+  currently_employed: true
+  actively_looking: false  # true = actively searching, false = only exceptional opportunities
+
+  # Urgency level determines response tone
+  # Options: urgent, moderate, selective, not_looking
+  urgency: "selective"
+
+  # Your current situation (free text - be specific!)
+  situation: |
+    Currently employed and happy, but open to exceptional opportunities.
+    Only considering roles with 4-day work week.
+    Focused on AI/ML engineering positions.
+
+  # Deal-breakers - opportunities missing these will be politely declined
+  must_have:
+    - "4-day work week (mandatory)"
+    - "Remote-first company"
+    - "Focus on AI/ML projects"
+    - "Senior or Staff level position"
+
+  # Nice to have - will express interest if present
+  nice_to_have:
+    - "Equity compensation"
+    - "Conference/learning budget"
+    - "Modern tech stack"
+    - "Flexible hours"
+
+  # Automatic rejection criteria - will decline opportunities matching these
+  reject_if:
+    - "Agencies or consulting firms"
+    - "Cryptocurrency/blockchain only"
+    - "Early-stage startups (pre-seed)"
+    - "5-day work week requirement"
+    - "Full-time on-site"
+```
+
+**How urgency affects responses:**
+
+| Urgency Level | Response Behavior |
+|---------------|-------------------|
+| `urgent` | Proactive, enthusiastic responses. Express strong interest in good matches. |
+| `moderate` | Balanced responses. Show interest and ask clarifying questions. |
+| `selective` | Reserved responses. Emphasize specific requirements before proceeding. |
+| `not_looking` | Polite but firm. Only engage with truly exceptional opportunities. |
+
+**Example response behaviors:**
+
+- **HIGH_PRIORITY opportunity + `selective` urgency**: Express interest but ask about must-have requirements (e.g., "Before we proceed, does the role offer a 4-day work week?")
+- **INTERESANTE opportunity + `not_looking` urgency**: Politely acknowledge but mention you're not actively looking unless it meets specific criteria
+- **Any opportunity missing `must_have` items**: Politely decline and mention the specific requirement that wasn't met
+- **Opportunity matching `reject_if` criteria**: Automatic polite decline with brief explanation
+
+### Daily Summary Email
+
+Instead of sending individual emails for each opportunity, the system sends **ONE daily summary email** at 9 AM containing all new opportunities found.
+
+**Email includes for each opportunity:**
+- Tier classification (HIGH_PRIORITY, INTERESANTE, POCO_INTERESANTE, NO_INTERESA)
+- Score breakdown (tech stack, salary, seniority, company)
+- Extracted information (company, role, salary range, tech stack)
+- AI-generated response (personalized to your professional status)
+- Action buttons: Approve / Edit / Decline
+
+**Development with Mailpit:**
+
+In development, emails are captured by Mailpit instead of being sent to real addresses:
+
+```bash
+# Mailpit is included in docker-compose.yml
+# View captured emails at:
+open http://localhost:8025
+```
+
+Mailpit captures all outgoing emails, making it easy to test and preview the daily summary without configuring a real SMTP server.
 
 ---
 

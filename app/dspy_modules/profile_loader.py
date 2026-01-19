@@ -77,6 +77,55 @@ def load_profile(profile_path: Optional[str] = None) -> CandidateProfile:
 
 # Cached profile instance
 _cached_profile: Optional[CandidateProfile] = None
+_cached_profile_dict: Optional[dict] = None
+
+
+def load_profile_dict(profile_path: Optional[str] = None) -> dict:
+    """
+    Load raw profile dictionary from YAML file.
+
+    This includes all fields including job_search_status which is not
+    part of the CandidateProfile model.
+
+    Args:
+        profile_path: Path to profile YAML file (default from settings)
+
+    Returns:
+        dict: Raw profile data
+
+    Raises:
+        ConfigurationError: If profile cannot be loaded
+    """
+    path = profile_path or settings.PROFILE_PATH
+
+    try:
+        profile_file = Path(path)
+
+        if not profile_file.exists():
+            raise ConfigurationError(
+                message=f"Profile file not found: {path}",
+                details={"path": path},
+            )
+
+        # Load YAML
+        with open(profile_file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        return data
+
+    except yaml.YAMLError as e:
+        logger.error("profile_yaml_parse_error", error=str(e))
+        raise ConfigurationError(
+            message="Failed to parse profile YAML",
+            details={"error": str(e), "path": path},
+        ) from e
+
+    except Exception as e:
+        logger.error("profile_load_error", error=str(e))
+        raise ConfigurationError(
+            message="Failed to load profile",
+            details={"error": str(e), "path": path},
+        ) from e
 
 
 def get_profile(reload: bool = False) -> CandidateProfile:
@@ -95,3 +144,23 @@ def get_profile(reload: bool = False) -> CandidateProfile:
         _cached_profile = load_profile()
 
     return _cached_profile
+
+
+def get_profile_dict(reload: bool = False) -> dict:
+    """
+    Get raw profile dictionary (cached).
+
+    Includes all fields including job_search_status.
+
+    Args:
+        reload: Force reload from file
+
+    Returns:
+        dict: Raw profile data
+    """
+    global _cached_profile_dict
+
+    if _cached_profile_dict is None or reload:
+        _cached_profile_dict = load_profile_dict()
+
+    return _cached_profile_dict

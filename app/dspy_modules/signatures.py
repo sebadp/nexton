@@ -94,7 +94,7 @@ class ResponseGenerationSignature(dspy.Signature):
     Generate a professional response to the recruiter.
 
     Creates personalized, context-aware responses based on
-    the opportunity score and details.
+    the opportunity score, details, and candidate's current professional situation.
     """
 
     # Inputs
@@ -122,17 +122,21 @@ class ResponseGenerationSignature(dspy.Signature):
     candidate_name: str = dspy.InputField(
         desc="Candidate's name"
     )
+    candidate_context: str = dspy.InputField(
+        desc="Candidate's current professional situation, job search status, must-have requirements, and deal-breakers. Use this to personalize the response appropriately."
+    )
 
     # Output
     response: str = dspy.OutputField(
-        desc="""Generate a professional response (50-150 words) that:
+        desc="""Generate a professional, contextual response (50-150 words) that:
         1. Thanks the recruiter by name
-        2. Shows interest proportional to the score/tier
-        3. For HIGH_PRIORITY: Express strong interest, mention relevant experience
-        4. For INTERESANTE: Express moderate interest, ask clarifying questions
-        5. For POCO_INTERESANTE: Politely decline or express very limited interest
-        6. For NO_INTERESA: Politely decline
+        2. CONSIDERS the candidate's current situation and requirements from candidate_context
+        3. For HIGH_PRIORITY: Express interest IF it aligns with candidate's must-haves. If not, politely decline mentioning specific requirements.
+        4. For INTERESANTE: Express moderate interest and ask about specific must-have requirements (e.g., work week, remote policy)
+        5. For POCO_INTERESANTE/NO_INTERESA: Politely decline, mentioning 1-2 specific reasons from candidate_context
+        6. If the opportunity doesn't meet deal-breakers (e.g., no 4-day work week mentioned), politely decline and mention this requirement
         7. MUST end with: '*Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad.'
         8. Use a professional but friendly tone in Spanish
+        9. Be honest about requirements - don't waste anyone's time with opportunities that don't match
         """
     )

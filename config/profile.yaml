@@ -55,17 +55,43 @@ industry_preferences:
 open_to_relocation: false
 looking_for_change: true
 
-notes: |
-  Currently focused on AI/ML opportunities, only
-  interested in 4 days of work week. If not mentioned this politelly reject.
+# Professional Status (used for AI response generation)
+job_search_status:
+  currently_employed: true
+  actively_looking: true  # true = buscando activamente, false = solo oportunidades excepcionales
+  urgency: "selective"  # Options: urgent, moderate, selective, not_looking
 
+  # Your current situation and what you're looking for
+  situation: |
+    Currently employed but open to exceptional opportunities.
+    Only considering roles with 4-day work week.
+    Focused on AI/ML engineering positions with strong technical teams.
+
+  # Deal-breakers (will reject opportunities that don't meet these)
+  must_have:
+    - "4-day work week (mandatory)"
+    - "Remote-first company"
+    - "Focus on AI/ML projects"
+    - "Senior or Staff level position"
+
+  # Nice to have (will mention interest if present)
+  nice_to_have:
+    - "Equity compensation"
+    - "Conference/learning budget"
+    - "Modern tech stack (Python 3.11+, latest frameworks)"
+    - "Flexible hours"
+
+  # Automatic rejection criteria
+  reject_if:
+    - "Agencies or consulting firms"
+    - "Cryptocurrency/blockchain only"
+    - "Early-stage startups (pre-seed)"
+    - "5-day work week requirement"
+    - "Full-time on-site"
+
+notes: |
   Prefer companies with:
   - Strong engineering culture
   - Remote-first mindset
   - Modern tech stack
   - Clear growth path
-
-  Not interested in:
-  - Agencies/consulting
-  - Cryptocurrency/blockchain only roles
-  - Early-stage startups (pre-seed)
