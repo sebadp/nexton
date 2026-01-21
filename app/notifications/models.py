@@ -79,3 +79,14 @@ class DailySummaryEmail:
     opportunities: list  # List of Opportunity model instances
     total_count: int
     date: str  # Date of the summary
+
+
+@dataclass
+class LiteSummaryEmail:
+    """Email data for lite mode summary (no database, uses OpportunityResult directly)."""
+
+    to: str
+    subject: str
+    results: list  # List of OpportunityResult from pipeline
+    total_count: int
+    date: str  # Date of the summary

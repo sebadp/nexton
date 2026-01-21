@@ -38,6 +38,7 @@ ideal_salary_usd: 120000   # Ideal annual salary
 
 # Work Preferences
 preferred_remote_policy: "Remote"  # Options: Remote, Hybrid, Flexible
+preferred_work_week: "4-days"  # Options: 4-days, 5-days, flexible
 preferred_locations:
   - "Remote"
   - "Argentina"

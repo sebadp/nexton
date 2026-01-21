@@ -275,7 +275,7 @@ def scrape_and_send_daily_summary(self) -> Dict:
                         tier=result.scoring.tier,
                         ai_response=result.ai_response,
                         status="processed",
-                        processing_time_ms=int(result.processing_time * 1000),
+                        processing_time_ms=result.processing_time_ms or 0,
                     )
 
                     await session.commit()

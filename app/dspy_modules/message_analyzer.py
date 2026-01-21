@@ -9,10 +9,168 @@ from typing import Optional
 import dspy
 
 from app.core.logging import get_logger
-from app.dspy_modules.models import ExtractedData
-from app.dspy_modules.signatures import MessageAnalysisSignature
+from app.dspy_modules.models import (
+    ConversationState,
+    ConversationStateResult,
+    ExtractedData,
+    FollowUpAnalysisResult,
+)
+from app.dspy_modules.signatures import (
+    ConversationStateSignature,
+    FollowUpAnalysisSignature,
+    MessageAnalysisSignature,
+)
 
 logger = get_logger(__name__)
+
+
+# Common courtesy/closing phrases that indicate no response needed
+COURTESY_PHRASES = {
+    # Spanish
+    "gracias", "muchas gracias", "ok", "dale", "perfecto", "excelente",
+    "genial", "quedamos así", "quedamos en contacto", "suerte", "éxitos",
+    "buena suerte", "saludos", "un saludo", "hasta pronto", "nos vemos",
+    "listo", "entendido", "de acuerdo", "vale", "bien", "bueno",
+    "claro", "por supuesto", "ningún problema", "todo bien",
+    # English
+    "thanks", "thank you", "ok", "okay", "perfect", "great", "good luck",
+    "sounds good", "got it", "understood", "noted", "will do",
+}
+
+
+class ConversationStateAnalyzer(dspy.Module):
+    """
+    Analyzes messages to determine conversation state.
+
+    Uses both rule-based detection for obvious cases and LLM
+    for more nuanced classification.
+    """
+
+    def __init__(self):
+        """Initialize the conversation state analyzer."""
+        super().__init__()
+        self.analyze = dspy.ChainOfThought(ConversationStateSignature)
+
+    def forward(self, message: str) -> ConversationStateResult:
+        """
+        Analyze message to determine conversation state.
+
+        Args:
+            message: Raw LinkedIn message
+
+        Returns:
+            ConversationStateResult: Classification result
+        """
+        logger.debug("conversation_state_analyzer_start", message_length=len(message))
+
+        # Step 1: Quick rule-based check for obvious courtesy messages
+        quick_result = self._quick_courtesy_check(message)
+        if quick_result:
+            logger.info(
+                "conversation_state_quick_detect",
+                state=quick_result.state.value,
+                confidence=quick_result.confidence,
+            )
+            return quick_result
+
+        # Step 2: Use LLM for more nuanced classification
+        try:
+            prediction = self.analyze(message=message)
+
+            # Parse the state
+            state = self._parse_state(prediction.conversation_state)
+            contains_job_details = prediction.contains_job_details.upper() == "YES"
+
+            # Determine if we should process
+            should_process = state != ConversationState.COURTESY_CLOSE
+
+            result = ConversationStateResult(
+                state=state,
+                confidence=prediction.confidence.upper(),
+                reasoning=prediction.reasoning,
+                contains_job_details=contains_job_details,
+                should_process=should_process,
+            )
+
+            logger.info(
+                "conversation_state_analyzed",
+                state=result.state.value,
+                confidence=result.confidence,
+                should_process=result.should_process,
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("conversation_state_analyzer_failed", error=str(e))
+            # Default to NEW_OPPORTUNITY to avoid missing real opportunities
+            return ConversationStateResult(
+                state=ConversationState.NEW_OPPORTUNITY,
+                confidence="LOW",
+                reasoning=f"Analysis failed, defaulting to NEW_OPPORTUNITY: {str(e)}",
+                contains_job_details=True,
+                should_process=True,
+            )
+
+    def _quick_courtesy_check(self, message: str) -> Optional[ConversationStateResult]:
+        """
+        Quick rule-based check for obvious courtesy messages.
+
+        Args:
+            message: Raw message
+
+        Returns:
+            ConversationStateResult if obviously courtesy, None otherwise
+        """
+        # Clean and normalize the message
+        cleaned = message.strip().lower()
+
+        # Remove common punctuation
+        cleaned = re.sub(r'[!?.,;:]+$', '', cleaned)
+        cleaned = cleaned.strip()
+
+        # Check if entire message is a courtesy phrase
+        if cleaned in COURTESY_PHRASES:
+            return ConversationStateResult.courtesy_close(
+                reasoning=f"Message is a known courtesy phrase: '{cleaned}'"
+            )
+
+        # Check for very short messages (< 20 chars) that are likely acknowledgments
+        if len(cleaned) < 20:
+            # Check if it contains any courtesy phrase
+            for phrase in COURTESY_PHRASES:
+                if phrase in cleaned:
+                    return ConversationStateResult.courtesy_close(
+                        reasoning=f"Short message containing courtesy phrase: '{phrase}'"
+                    )
+
+        # Check for messages that are just greetings + thanks
+        greeting_thanks_pattern = r'^(hola|hi|hey)?\s*(,|\.)?\s*(gracias|thanks|thank you)\.?$'
+        if re.match(greeting_thanks_pattern, cleaned, re.IGNORECASE):
+            return ConversationStateResult.courtesy_close(
+                reasoning="Message is a simple greeting with thanks"
+            )
+
+        return None
+
+    def _parse_state(self, state_str: str) -> ConversationState:
+        """
+        Parse conversation state from LLM output.
+
+        Args:
+            state_str: State string from LLM
+
+        Returns:
+            ConversationState enum value
+        """
+        state_upper = state_str.upper().strip()
+
+        if "COURTESY" in state_upper or "CLOSE" in state_upper:
+            return ConversationState.COURTESY_CLOSE
+        elif "FOLLOW" in state_upper:
+            return ConversationState.FOLLOW_UP
+        else:
+            return ConversationState.NEW_OPPORTUNITY
 
 
 class MessageAnalyzer(dspy.Module):
@@ -203,3 +361,156 @@ class MessageAnalyzer(dspy.Module):
             return "Onsite"
         else:
             return "Unknown"
+
+
+class FollowUpAnalyzer(dspy.Module):
+    """
+    Analyzes FOLLOW_UP messages to determine if they can be auto-responded.
+
+    Only allows auto-response for clear, profile-answerable questions.
+    """
+
+    # Questions that CAN be auto-answered with profile data
+    AUTO_RESPONDABLE_TYPES = {"SALARY", "AVAILABILITY", "EXPERIENCE"}
+
+    def __init__(self):
+        """Initialize the follow-up analyzer."""
+        super().__init__()
+        self.analyze = dspy.ChainOfThought(FollowUpAnalysisSignature)
+
+    def forward(self, message: str, profile_dict: dict) -> FollowUpAnalysisResult:
+        """
+        Analyze a follow-up message to determine if it can be auto-responded.
+
+        Args:
+            message: The follow-up message
+            profile_dict: Candidate's profile dictionary
+
+        Returns:
+            FollowUpAnalysisResult: Analysis result
+        """
+        logger.debug("follow_up_analyzer_start", message_length=len(message))
+
+        # Build profile summary for the LLM
+        profile_summary = self._build_profile_summary(profile_dict)
+
+        try:
+            prediction = self.analyze(
+                message=message,
+                candidate_profile_summary=profile_summary,
+            )
+
+            # Parse results
+            question_type = prediction.question_type.upper().strip()
+            can_auto_respond = prediction.can_auto_respond.upper() == "YES"
+            requires_context = prediction.requires_context.upper() == "YES"
+            detected_question = prediction.detected_question if prediction.detected_question != "N/A" else None
+
+            # Double-check: only allow auto-respond for specific question types
+            if can_auto_respond and question_type not in self.AUTO_RESPONDABLE_TYPES:
+                can_auto_respond = False
+
+            # Generate suggested response if auto-respond is allowed
+            suggested_response = None
+            if can_auto_respond:
+                suggested_response = self._generate_auto_response(
+                    question_type, profile_dict, detected_question
+                )
+
+            result = FollowUpAnalysisResult(
+                can_auto_respond=can_auto_respond,
+                question_type=question_type,
+                detected_question=detected_question,
+                suggested_response=suggested_response,
+                reasoning=prediction.reasoning,
+                requires_context=requires_context,
+            )
+
+            logger.info(
+                "follow_up_analysis_complete",
+                question_type=question_type,
+                can_auto_respond=can_auto_respond,
+                requires_context=requires_context,
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("follow_up_analyzer_failed", error=str(e))
+            return FollowUpAnalysisResult.manual_review(
+                reasoning=f"Analysis failed: {str(e)}"
+            )
+
+    def _build_profile_summary(self, profile_dict: dict) -> str:
+        """Build a summary of the candidate's profile for the LLM."""
+        lines = []
+
+        # Basic info
+        lines.append(f"Name: {profile_dict.get('name', 'Unknown')}")
+        lines.append(f"Experience: {profile_dict.get('years_of_experience', 'Unknown')} years")
+        lines.append(f"Current level: {profile_dict.get('current_seniority', 'Unknown')}")
+
+        # Salary
+        min_salary = profile_dict.get('minimum_salary_usd', 0)
+        ideal_salary = profile_dict.get('ideal_salary_usd', 0)
+        lines.append(f"Salary expectation: ${min_salary:,} - ${ideal_salary:,} USD annually")
+
+        # Technologies
+        techs = profile_dict.get('preferred_technologies', [])
+        if techs:
+            lines.append(f"Key technologies: {', '.join(techs[:10])}")
+
+        # Work preferences
+        lines.append(f"Remote preference: {profile_dict.get('preferred_remote_policy', 'Remote')}")
+        lines.append(f"Work week preference: {profile_dict.get('preferred_work_week', '4-days')}")
+
+        # Job search status
+        job_search = profile_dict.get('job_search_status', {})
+        lines.append(f"Currently employed: {job_search.get('currently_employed', 'Unknown')}")
+        lines.append(f"Actively looking: {job_search.get('actively_looking', 'Unknown')}")
+
+        return "\n".join(lines)
+
+    def _generate_auto_response(
+        self,
+        question_type: str,
+        profile_dict: dict,
+        detected_question: Optional[str],
+    ) -> str:
+        """Generate an auto-response for answerable questions."""
+
+        candidate_name = profile_dict.get('name', '').split()[0]  # First name
+
+        if question_type == "SALARY":
+            min_salary = profile_dict.get('minimum_salary_usd', 80000)
+            ideal_salary = profile_dict.get('ideal_salary_usd', 120000)
+            return f"""Gracias por preguntar. Mi expectativa salarial está en el rango de ${min_salary:,} - ${ideal_salary:,} USD anuales, dependiendo de las responsabilidades y beneficios del rol.
+
+*Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad."""
+
+        elif question_type == "AVAILABILITY":
+            job_search = profile_dict.get('job_search_status', {})
+            currently_employed = job_search.get('currently_employed', True)
+
+            if currently_employed:
+                return f"""Actualmente estoy empleado, por lo que necesitaría coordinar una transición. En general, podría estar disponible con un aviso de 2-4 semanas.
+
+*Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad."""
+            else:
+                return f"""Estoy disponible para comenzar de inmediato o en un plazo corto según las necesidades del proyecto.
+
+*Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad."""
+
+        elif question_type == "EXPERIENCE":
+            years = profile_dict.get('years_of_experience', 5)
+            techs = profile_dict.get('preferred_technologies', [])
+            seniority = profile_dict.get('current_seniority', 'Senior')
+
+            tech_list = ', '.join(techs[:5]) if techs else 'Python, FastAPI, PostgreSQL'
+            return f"""Tengo {years} años de experiencia profesional, actualmente en nivel {seniority}. Mis tecnologías principales incluyen: {tech_list}.
+
+Si necesitas más detalles sobre alguna tecnología específica, con gusto te los comparto.
+
+*Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad."""
+
+        return None

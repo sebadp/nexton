@@ -4,9 +4,158 @@ Pydantic models for DSPy pipeline data structures.
 These models provide type safety and validation for data
 flowing through the pipeline.
 """
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class ConversationState(str, Enum):
+    """Classification of the conversation/message state."""
+
+    NEW_OPPORTUNITY = "NEW_OPPORTUNITY"  # Recruiter presenting a new job
+    FOLLOW_UP = "FOLLOW_UP"  # Recruiter responding to candidate's previous message
+    COURTESY_CLOSE = "COURTESY_CLOSE"  # Simple acknowledgment (Gracias, Ok, etc.)
+
+
+class ProcessingStatus(str, Enum):
+    """Final processing status for an opportunity."""
+
+    PROCESSED = "processed"  # Normal processing, response generated
+    IGNORED = "ignored"  # Courtesy message, no response needed
+    DECLINED = "declined"  # Failed hard filters, polite decline generated
+    MANUAL_REVIEW_REQUIRED = "manual_review"  # Follow-up needs human review
+    AUTO_RESPONDED = "auto_responded"  # Follow-up with answerable question
+
+
+class CandidateStatus(str, Enum):
+    """Job search status of the candidate."""
+
+    ACTIVE_SEARCH = "ACTIVE_SEARCH"  # Actively looking for opportunities
+    PASSIVE = "PASSIVE"  # Not actively looking, but open to exceptional offers
+    SELECTIVE = "SELECTIVE"  # Very selective, specific requirements
+    NOT_LOOKING = "NOT_LOOKING"  # Not interested in new opportunities
+
+
+class ConversationStateResult(BaseModel):
+    """Result of conversation state analysis."""
+
+    state: ConversationState = Field(
+        description="The classified conversation state"
+    )
+    confidence: str = Field(
+        description="Confidence level: HIGH, MEDIUM, LOW",
+        default="MEDIUM",
+    )
+    reasoning: str = Field(
+        description="Why this classification was chosen",
+        default="",
+    )
+    contains_job_details: bool = Field(
+        description="Whether the message contains actual job information",
+        default=False,
+    )
+    should_process: bool = Field(
+        description="Whether the pipeline should continue processing",
+        default=True,
+    )
+
+    @classmethod
+    def courtesy_close(cls, reasoning: str = "Message is a simple courtesy/acknowledgment") -> "ConversationStateResult":
+        """Factory for COURTESY_CLOSE state."""
+        return cls(
+            state=ConversationState.COURTESY_CLOSE,
+            confidence="HIGH",
+            reasoning=reasoning,
+            contains_job_details=False,
+            should_process=False,
+        )
+
+
+class HardFilterResult(BaseModel):
+    """Result of hard filter validation."""
+
+    passed: bool = Field(
+        description="Whether all hard filters passed"
+    )
+    failed_filters: List[str] = Field(
+        description="List of filters that failed",
+        default_factory=list,
+    )
+    score_penalty: int = Field(
+        description="Score penalty to apply (0-100)",
+        default=0,
+        ge=0,
+        le=100,
+    )
+    should_decline: bool = Field(
+        description="Whether the response should be a polite decline",
+        default=False,
+    )
+    work_week_status: str = Field(
+        description="4-day work week status: CONFIRMED, NOT_MENTIONED, FIVE_DAY, UNKNOWN",
+        default="UNKNOWN",
+    )
+
+    @classmethod
+    def all_passed(cls) -> "HardFilterResult":
+        """Factory for when all filters pass."""
+        return cls(
+            passed=True,
+            failed_filters=[],
+            score_penalty=0,
+            should_decline=False,
+        )
+
+    @classmethod
+    def skipped(cls) -> "HardFilterResult":
+        """Factory for when hard filters are skipped (e.g., for FOLLOW_UP)."""
+        return cls(
+            passed=True,
+            failed_filters=[],
+            score_penalty=0,
+            should_decline=False,
+            work_week_status="SKIPPED",
+        )
+
+
+class FollowUpAnalysisResult(BaseModel):
+    """Result of analyzing a FOLLOW_UP message for auto-response capability."""
+
+    can_auto_respond: bool = Field(
+        description="Whether the system can safely auto-respond to this follow-up",
+        default=False,
+    )
+    question_type: Optional[str] = Field(
+        description="Type of question detected: SALARY, AVAILABILITY, TECH_STACK, EXPERIENCE, INTEREST, NONE, OTHER",
+        default=None,
+    )
+    detected_question: Optional[str] = Field(
+        description="The specific question detected in the message",
+        default=None,
+    )
+    suggested_response: Optional[str] = Field(
+        description="If auto-respond is possible, the suggested response based on profile",
+        default=None,
+    )
+    reasoning: str = Field(
+        description="Why this decision was made",
+        default="",
+    )
+    requires_context: bool = Field(
+        description="Whether answering requires previous conversation context we don't have",
+        default=True,
+    )
+
+    @classmethod
+    def manual_review(cls, reasoning: str = "Follow-up requires manual review") -> "FollowUpAnalysisResult":
+        """Factory for when manual review is needed."""
+        return cls(
+            can_auto_respond=False,
+            question_type="NONE",
+            requires_context=True,
+            reasoning=reasoning,
+        )
 
 
 class ExtractedData(BaseModel):
@@ -41,6 +190,14 @@ class ExtractedData(BaseModel):
     location: str = Field(
         description="Job location",
         default="Not specified",
+    )
+    job_type: str = Field(
+        description="Job type: Full-time, Part-time, Contract, etc.",
+        default="Full-time",
+    )
+    work_week: str = Field(
+        description="Work week mentioned: 4-days, 5-days, flexible, or Unknown",
+        default="Unknown",
     )
 
     @field_validator("tech_stack", mode="before")
@@ -149,6 +306,10 @@ class CandidateProfile(BaseModel):
         description="Preferred work arrangement: Remote, Hybrid, or Flexible",
         default="Remote",
     )
+    preferred_work_week: str = Field(
+        description="Preferred work week: 4-days, 5-days, or flexible",
+        default="5-days",
+    )
     preferred_locations: List[str] = Field(
         description="Preferred work locations",
         default_factory=list,
@@ -186,8 +347,26 @@ class OpportunityResult(BaseModel):
     recruiter_name: str
     raw_message: str
 
+    # Conversation state analysis
+    conversation_state: Optional[ConversationStateResult] = Field(
+        description="Result of conversation state analysis",
+        default=None,
+    )
+
+    # Follow-up analysis (only populated for FOLLOW_UP state)
+    follow_up_analysis: Optional[FollowUpAnalysisResult] = Field(
+        description="Analysis of follow-up message for auto-response capability",
+        default=None,
+    )
+
     # Extracted data
     extracted: ExtractedData
+
+    # Hard filter validation
+    hard_filter_result: Optional[HardFilterResult] = Field(
+        description="Result of hard filter validation",
+        default=None,
+    )
 
     # Scoring results
     scoring: ScoringResult
@@ -197,7 +376,15 @@ class OpportunityResult(BaseModel):
 
     # Metadata
     processing_time_ms: Optional[int] = None
-    status: str = "processed"
+    status: str = "processed"  # processed, ignored, declined, manual_review, auto_responded
+    requires_manual_review: bool = Field(
+        description="Whether this message needs manual human review",
+        default=False,
+    )
+    manual_review_reason: Optional[str] = Field(
+        description="Reason why manual review is required",
+        default=None,
+    )
     error_message: Optional[str] = None
 
     def to_db_dict(self) -> dict:

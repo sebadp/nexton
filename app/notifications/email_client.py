@@ -13,7 +13,7 @@ import structlog
 
 from app.core.config import settings
 from app.core.exceptions import ConfigurationError
-from app.notifications.models import DailySummaryEmail, OpportunityEmail
+from app.notifications.models import DailySummaryEmail, LiteSummaryEmail, OpportunityEmail
 
 logger = structlog.get_logger(__name__)
 
@@ -181,6 +181,32 @@ class EmailClient:
             text_body=text_body,
         )
 
+    async def send_lite_summary_email(self, email_data: LiteSummaryEmail) -> bool:
+        """
+        Send lite mode summary email (uses OpportunityResult directly).
+
+        Args:
+            email_data: Email data including list of OpportunityResult
+
+        Returns:
+            bool: True if sent successfully
+        """
+        from app.notifications.templates import render_lite_summary_email
+
+        # Render HTML template
+        html_body = render_lite_summary_email(email_data)
+
+        # Create plain text fallback
+        text_body = self._create_lite_summary_text_fallback(email_data)
+
+        # Send email
+        return await self.send_email(
+            to=email_data.to,
+            subject=email_data.subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
     def _create_text_fallback(self, email_data: OpportunityEmail) -> str:
         """
         Create plain text version of email.
@@ -276,6 +302,87 @@ class EmailClient:
             "=" * 60,
             "",
             "LinkedIn AI Agent - Daily Summary",
+        ])
+
+        return "\n".join(lines)
+
+    def _create_lite_summary_text_fallback(self, email_data: LiteSummaryEmail) -> str:
+        """
+        Create plain text version of lite summary email.
+
+        Args:
+            email_data: Lite summary email data
+
+        Returns:
+            str: Plain text email body
+        """
+        lines = [
+            f"LinkedIn Agent Lite Summary - {email_data.date}",
+            f"{email_data.total_count} messages processed",
+            "",
+            "=" * 60,
+            "",
+        ]
+
+        for i, result in enumerate(email_data.results, 1):
+            # Get status emoji
+            status_icon = {
+                "processed": "[OK]",
+                "declined": "[DECLINED]",
+                "manual_review": "[REVIEW]",
+                "auto_responded": "[AUTO]",
+                "ignored": "[SKIP]",
+            }.get(result.status, "[?]")
+
+            # Get tier and score
+            tier = result.scoring.tier if result.scoring else "N/A"
+            score = result.scoring.total_score if result.scoring else 0
+
+            # Get conversation state
+            state = result.conversation_state.state.value if result.conversation_state else "UNKNOWN"
+
+            lines.extend([
+                f"Message #{i} {status_icon} - {tier} (Score: {score}/100)",
+                "-" * 60,
+                f"From: {result.recruiter_name}",
+                f"State: {state}",
+                f"Company: {result.extracted.company or 'Unknown'}",
+                f"Role: {result.extracted.role or 'Unknown'}",
+                f"Tech Stack: {', '.join(result.extracted.tech_stack or [])}",
+                "",
+            ])
+
+            # Add hard filter info if declined
+            if result.hard_filter_result and result.hard_filter_result.failed_filters:
+                lines.extend([
+                    f"Failed Filters: {', '.join(result.hard_filter_result.failed_filters)}",
+                    "",
+                ])
+
+            # Add AI response
+            if result.ai_response:
+                response_preview = result.ai_response
+                if len(response_preview) > 300:
+                    response_preview = response_preview[:297] + "..."
+                lines.extend([
+                    "AI Response:",
+                    response_preview,
+                    "",
+                ])
+
+            # Add manual review reason if applicable
+            if result.requires_manual_review and result.manual_review_reason:
+                lines.extend([
+                    f"Manual Review Required: {result.manual_review_reason}",
+                    "",
+                ])
+
+            lines.append("")
+
+        lines.extend([
+            "=" * 60,
+            "",
+            "LinkedIn AI Agent Lite - Summary",
         ])
 
         return "\n".join(lines)

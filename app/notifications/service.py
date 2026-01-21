@@ -2,17 +2,24 @@
 Notification service for sending opportunity alerts.
 
 Handles email notifications when new opportunities are processed.
+Supports both full mode (with DB models) and lite mode (with pipeline results).
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import structlog
 
 from app.core.config import settings
-from app.database.models import Opportunity
 from app.notifications.email_client import EmailClient
-from app.notifications.models import DailySummaryEmail, NotificationRule, OpportunityEmail
+from app.notifications.models import DailySummaryEmail, LiteSummaryEmail, NotificationRule, OpportunityEmail
+
+# Conditional import for full mode (with database)
+if TYPE_CHECKING:
+    from app.database.models import Opportunity
+    from app.dspy_modules.models import OpportunityResult
 
 logger = structlog.get_logger(__name__)
 
@@ -170,6 +177,69 @@ class NotificationService:
             logger.error(
                 "daily_summary_failed",
                 opportunities_count=len(opportunities),
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    async def send_lite_summary(
+        self,
+        results: list["OpportunityResult"],
+    ) -> bool:
+        """
+        Send summary email for lite mode (no database).
+
+        Works with OpportunityResult directly from pipeline, no DB models needed.
+
+        Args:
+            results: List of OpportunityResult from pipeline processing
+
+        Returns:
+            bool: True if notification was sent
+        """
+        # Check if notifications are enabled
+        if not self.notification_rule.enabled:
+            logger.debug("notifications_disabled")
+            return False
+
+        # Check if notification email is configured
+        if not self.notification_rule.notify_email:
+            logger.warning("notification_email_not_configured")
+            return False
+
+        # Filter results - only non-ignored messages
+        valid_results = [r for r in results if r.status != "ignored"]
+
+        # Check if there are any results
+        if not valid_results:
+            logger.info("no_results_to_send")
+            return False
+
+        try:
+            # Build email data
+            email_data = LiteSummaryEmail(
+                to=self.notification_rule.notify_email,
+                subject=f"LinkedIn Agent Lite - {len(valid_results)} message{'s' if len(valid_results) != 1 else ''} processed",
+                results=valid_results,
+                total_count=len(valid_results),
+                date=datetime.now().strftime("%B %d, %Y"),
+            )
+
+            # Send email
+            await self.email_client.send_lite_summary_email(email_data)
+
+            logger.info(
+                "lite_summary_sent",
+                results_count=len(valid_results),
+                to=email_data.to,
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                "lite_summary_failed",
+                results_count=len(results),
                 error=str(e),
                 exc_info=True,
             )

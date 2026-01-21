@@ -13,8 +13,26 @@ Automate your LinkedIn job search with enterprise-grade AI. Analyze recruiter me
 
 ---
 
+## 🎯 Choose Your Version
+
+| Version | Best For | Infrastructure |
+|---------|----------|----------------|
+| **[Full Version](#-quick-start)** | Production, teams, full observability | PostgreSQL, Redis, Celery, Docker |
+| **[Lite Version](docs/TESTING_GUIDE.md#lite-version-no-infrastructure)** | Quick testing, low resources, learning | Just Python + LLM |
+
+**New here?** Start with the [Lite Version](docs/TESTING_GUIDE.md#lite-version-no-infrastructure) - no Docker required!
+
+```bash
+# Lite Version - Run in 2 minutes
+pip install -r requirements-lite.txt && playwright install chromium
+python scripts/run_lite.py --sample
+```
+
+---
+
 ## 📖 Table of Contents
 
+- [Choose Your Version](#-choose-your-version)
 - [The Problem](#-the-problem)
 - [The Solution](#-the-solution)
 - [Key Features](#-key-features)

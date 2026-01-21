@@ -34,13 +34,13 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://user:pass@localhost:5432/linkedin_agent"
+    # Database (Optional for lite mode)
+    DATABASE_URL: Optional[str] = None
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 0
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # Redis (Optional for lite mode)
+    REDIS_URL: Optional[str] = None
     REDIS_MAX_CONNECTIONS: int = 50
 
     # AI/ML - Multi-LLM Support
@@ -69,9 +69,9 @@ class Settings(BaseSettings):
     RESPONSE_LLM_PROVIDER: Optional[str] = None
     RESPONSE_LLM_MODEL: Optional[str] = None
 
-    # Celery
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    # Celery (Optional for lite mode)
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
     CELERY_WORKER_CONCURRENCY: int = 4
 
     # Observability
@@ -128,7 +128,7 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
-    def build_database_url(cls, v: str, info) -> str:
+    def build_database_url(cls, v: Optional[str], info) -> Optional[str]:
         """Build database URL for async driver if needed."""
         if v and "postgresql://" in v and "asyncpg" not in v:
             return v.replace("postgresql://", "postgresql+asyncpg://")
@@ -164,6 +164,11 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         """Check if running tests."""
         return self.ENV == "test"
+
+    @property
+    def is_lite_mode(self) -> bool:
+        """Check if running in lite mode (no DB/Redis/Celery)."""
+        return not self.DATABASE_URL or not self.REDIS_URL
 
 
 # Create global settings instance

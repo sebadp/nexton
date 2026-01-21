@@ -6,6 +6,7 @@ Comprehensive guide for testing and validating the LinkedIn AI Agent Platform (S
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
+- [Quick Pipeline Testing](#quick-pipeline-testing-no-infrastructure-required)
 - [Automated Tests](#automated-tests)
 - [Manual Testing](#manual-testing)
 - [Sprint 3 Features Testing](#sprint-3-features-testing)
@@ -76,6 +77,246 @@ pip install -r requirements-dev.txt
 
 # 4. Install aiosqlite for tests
 pip install aiosqlite
+```
+
+---
+
+## Quick Pipeline Testing (No Infrastructure Required)
+
+These scripts let you test the DSPy pipeline without starting the full Docker stack.
+
+### 1. Test with Sample Messages (Offline)
+
+```bash
+# Test pipeline with predefined sample messages
+# No LinkedIn login required - uses hardcoded test cases
+python test_message_generation.py --sample
+```
+
+This tests:
+- **Conversation state detection**: NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE
+- **Hard filters**: 4-day work week requirement, salary minimums, tech stack match
+- **AI response generation**: Personalized responses based on profile
+- **Manual review detection**: Flags ambiguous follow-ups that need human attention
+
+**Expected output for each message:**
+- 🆕 NEW_OPPORTUNITY → Full scoring + AI response
+- 🔄 FOLLOW_UP → Manual review required OR auto-response (salary/availability questions)
+- 👋 COURTESY_CLOSE → Ignored (no response generated)
+
+### 2. Test with Real LinkedIn Messages
+
+```bash
+# Scrapes real messages and generates responses (without sending)
+python test_message_generation.py
+```
+
+**Requires:**
+- `LINKEDIN_EMAIL` and `LINKEDIN_PASSWORD` in `.env`
+- LLM provider running (Ollama recommended: `ollama serve`)
+
+**What it does:**
+1. Logs into LinkedIn
+2. Scrapes up to 10 recent messages
+3. Processes each through the DSPy pipeline
+4. Shows conversation state, scoring, hard filter results
+5. Displays generated AI responses (NOT sent to LinkedIn)
+
+### 3. Run Daily Scrape & Email Summary
+
+```bash
+# Full pipeline: scrape → process → save to DB → send email summary
+python scripts/run_daily_scrape.py
+```
+
+**View emails at:** http://localhost:8025 (Mailpit)
+
+**What it does:**
+1. Scrapes unread LinkedIn messages
+2. Processes each through DSPy pipeline
+3. Saves opportunities to database
+4. Sends ONE summary email with all new opportunities
+
+This is the same task that runs daily at 9 AM via Celery Beat.
+
+**Requires:**
+- PostgreSQL running (`docker-compose up -d postgres`)
+- Mailpit running (`docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit`)
+- LinkedIn credentials in `.env`
+- LLM provider configured
+
+### 4. Via Celery (Alternative)
+
+```bash
+# Trigger the daily task via Celery CLI
+celery -A app.tasks.celery_app call app.tasks.scraping_tasks.scrape_and_send_daily_summary
+```
+
+---
+
+## Lite Version (No Infrastructure)
+
+The **Lite Version** allows you to run the LinkedIn Agent without any infrastructure (no Database, Redis, Celery, FastAPI, or Docker). Perfect for:
+- Quick testing and development
+- Running on low-resource machines
+- Simple cron-based automation
+- Learning how the pipeline works
+
+### Quick Start
+
+```bash
+# 1. Install lite dependencies only (~15 packages vs ~60)
+pip install -r requirements-lite.txt
+playwright install chromium
+
+# 2. Copy the lite environment template
+cp env.lite.example .env
+
+# 3. Edit .env with your credentials
+# - LINKEDIN_EMAIL / LINKEDIN_PASSWORD
+# - LLM_PROVIDER (ollama recommended)
+# - NOTIFICATION_EMAIL
+
+# 4. Start Ollama (if using local LLM)
+ollama serve
+ollama pull llama3.2
+
+# 5. Start Mailpit to view emails locally
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+
+# 6. Run the lite agent
+python scripts/run_lite.py
+```
+
+### Usage Options
+
+```bash
+# Run with sample messages (no LinkedIn login needed)
+python scripts/run_lite.py --sample
+
+# Limit number of messages to process
+python scripts/run_lite.py --limit 5
+
+# Skip email sending (just process and print results)
+python scripts/run_lite.py --no-email
+
+# Verbose output
+python scripts/run_lite.py -v
+```
+
+### What the Lite Version Does
+
+1. **Scrapes LinkedIn** - Gets unread messages from your inbox
+2. **Processes with DSPy Pipeline** - Runs full analysis:
+   - Conversation state detection (NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE)
+   - Message extraction (company, role, salary, tech stack)
+   - Scoring (0-100 with tier classification)
+   - Hard filter checks (4-day work week, salary minimums)
+   - AI response generation
+3. **Sends Email Summary** - Beautiful HTML email with all results
+
+### Sample Output
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║           LinkedIn Agent Lite                             ║
+║           No DB • No Redis • No Docker                    ║
+╚═══════════════════════════════════════════════════════════╝
+
+🔧 Configuring DSPy with ollama/llama3.2...
+📝 Using 5 sample messages...
+
+📨 Found 5 messages to process
+
+============================================================
+Message #1 ✅ 🆕
+============================================================
+From: María García - Tech Recruiter
+State: NEW_OPPORTUNITY
+  → New job opportunity with specific details
+
+Extracted Data:
+  Company: TechCorp
+  Role: Senior Backend Engineer
+  Tech Stack: Python, FastAPI, PostgreSQL, Redis, AWS
+  Salary: $150,000 - $180,000
+
+Scoring:
+  Total: 85/100 (HIGH_PRIORITY)
+  Tech Stack: 35/40
+  Salary: 25/30
+  Seniority: 18/20
+  Company: 7/10
+
+💬 AI Response:
+----------------------------------------
+  Hola María,
+
+  ¡Gracias por contactarme! La posición en TechCorp
+  suena muy interesante...
+----------------------------------------
+
+Processing time: 2345ms
+
+📧 Email sent to: your_email@gmail.com
+   View at: http://localhost:8025
+
+✅ Done!
+```
+
+### RAM Usage Comparison
+
+| Component | Full Version | Lite Version |
+|-----------|-------------|--------------|
+| PostgreSQL | ~200MB | 0 |
+| Redis | ~50MB | 0 |
+| Celery Worker | ~150MB | 0 |
+| FastAPI/Uvicorn | ~100MB | 0 |
+| Monitoring stack | ~300MB | 0 |
+| **Script** | - | ~100MB |
+| Playwright browser | ~200MB | ~200MB |
+| Ollama (if local) | ~4GB | ~4GB |
+| **Total (without Ollama)** | **~1GB** | **~300MB** |
+
+### Automation with Cron
+
+Run daily at 9 AM:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (adjust paths)
+0 9 * * * cd /path/to/nexton && /path/to/venv/bin/python scripts/run_lite.py >> /var/log/linkedin-agent.log 2>&1
+```
+
+### Troubleshooting Lite Version
+
+**Error: "LINKEDIN_EMAIL and LINKEDIN_PASSWORD must be set"**
+```bash
+# Use sample messages for testing
+python scripts/run_lite.py --sample
+```
+
+**Error: "Failed to configure DSPy with ollama"**
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# If not, start it
+ollama serve
+```
+
+**No email received**
+```bash
+# Check if Mailpit is running
+docker ps | grep mailpit
+
+# If not, start it
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+
+# Verify SMTP settings in .env
+cat .env | grep SMTP
 ```
 
 ---
