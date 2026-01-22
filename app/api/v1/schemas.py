@@ -2,7 +2,7 @@
 API Schemas - Request/Response models for API endpoints.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -66,7 +66,7 @@ class OpportunityResponse(BaseModel):
     # Identifiers
     id: int
     recruiter_name: str
-    raw_message: str
+    raw_message: Optional[str] = None
 
     # Extracted data
     company: Optional[str] = None
@@ -88,6 +88,36 @@ class OpportunityResponse(BaseModel):
 
     # AI Response
     ai_response: Optional[str] = None
+
+    # Conversation Classification (NEW)
+    conversation_state: Optional[str] = Field(
+        None,
+        description="Conversation state: NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
+    )
+    processing_status: Optional[str] = Field(
+        None,
+        description="Processing status: processed, ignored, declined, manual_review, auto_responded",
+    )
+
+    # Manual Review (NEW)
+    requires_manual_review: bool = Field(
+        False,
+        description="Whether this opportunity needs manual human review",
+    )
+    manual_review_reason: Optional[str] = Field(
+        None,
+        description="Reason why manual review is required",
+    )
+
+    # Detailed Results (NEW - JSON)
+    hard_filter_results: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Results from hard filter checks (work_week, salary, tech_match, etc.)",
+    )
+    follow_up_analysis: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
+    )
 
     # Metadata
     status: str
@@ -117,6 +147,16 @@ class OpportunityResponse(BaseModel):
                 "total_score": 86,
                 "tier": "HIGH_PRIORITY",
                 "ai_response": "Hola María, muchas gracias por contactarme...",
+                "conversation_state": "NEW_OPPORTUNITY",
+                "processing_status": "processed",
+                "requires_manual_review": False,
+                "manual_review_reason": None,
+                "hard_filter_results": {
+                    "passed": True,
+                    "failed_filters": [],
+                    "work_week_status": "NOT_MENTIONED",
+                },
+                "follow_up_analysis": None,
                 "status": "processed",
                 "processing_time_ms": 1500,
                 "created_at": "2024-01-16T10:00:00",
@@ -164,6 +204,22 @@ class OpportunityStats(BaseModel):
     total_count: int
     by_tier: dict
     by_status: dict
+
+    # New classification stats
+    by_conversation_state: Optional[dict] = Field(
+        None,
+        description="Count by conversation state: NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
+    )
+    by_processing_status: Optional[dict] = Field(
+        None,
+        description="Count by processing status: processed, ignored, declined, manual_review, auto_responded",
+    )
+    pending_manual_review: int = Field(
+        0,
+        description="Count of opportunities requiring manual review",
+    )
+
+    # Score metrics
     average_score: Optional[float] = None
     highest_score: Optional[int] = None
     lowest_score: Optional[int] = None
@@ -183,6 +239,19 @@ class OpportunityStats(BaseModel):
                     "processing": 3,
                     "failed": 2,
                 },
+                "by_conversation_state": {
+                    "NEW_OPPORTUNITY": 80,
+                    "FOLLOW_UP": 15,
+                    "COURTESY_CLOSE": 5,
+                },
+                "by_processing_status": {
+                    "processed": 70,
+                    "declined": 10,
+                    "manual_review": 8,
+                    "auto_responded": 7,
+                    "ignored": 5,
+                },
+                "pending_manual_review": 8,
                 "average_score": 52.5,
                 "highest_score": 95,
                 "lowest_score": 10,

@@ -35,10 +35,28 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (including Playwright/Chromium dependencies)
 RUN apt-get update && apt-get install -y \
     libpq5 \
     curl \
+    # Playwright/Chromium dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -46,6 +64,12 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Copy Python dependencies from builder
 COPY --from=builder /install /usr/local
+
+# Install Playwright browsers to a shared location
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN mkdir -p /opt/playwright && \
+    playwright install chromium && \
+    chmod -R 755 /opt/playwright
 
 # Copy application code
 COPY app /app/app

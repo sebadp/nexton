@@ -324,30 +324,120 @@ class OpportunityRepository(BaseRepository):
             for tier in ["HIGH_PRIORITY", "INTERESANTE", "POCO_INTERESANTE", "NO_INTERESA"]:
                 tier_stats[tier] = await self.count(tier=tier)
 
-            # Average score
+            # Average, highest, lowest scores
             result = await self.session.execute(
-                select(func.avg(Opportunity.total_score)).where(
-                    Opportunity.total_score.is_not(None)
-                )
+                select(
+                    func.avg(Opportunity.total_score),
+                    func.max(Opportunity.total_score),
+                    func.min(Opportunity.total_score),
+                ).where(Opportunity.total_score.is_not(None))
             )
-            avg_score = result.scalar_one() or 0
+            row = result.one()
+            avg_score = row[0] or 0
+            highest_score = row[1]
+            lowest_score = row[2]
 
             # Count by status
             status_stats = {}
             for status in ["new", "processing", "processed", "error", "archived"]:
                 status_stats[status] = await self.count(status=status)
 
+            # Count by conversation state (NEW)
+            conversation_state_stats = {}
+            for state in ["NEW_OPPORTUNITY", "FOLLOW_UP", "COURTESY_CLOSE"]:
+                query = select(func.count(Opportunity.id)).where(
+                    Opportunity.conversation_state == state
+                )
+                result = await self.session.execute(query)
+                conversation_state_stats[state] = result.scalar_one()
+
+            # Count by processing status (NEW)
+            processing_status_stats = {}
+            for pstatus in ["processed", "ignored", "declined", "manual_review", "auto_responded"]:
+                query = select(func.count(Opportunity.id)).where(
+                    Opportunity.processing_status == pstatus
+                )
+                result = await self.session.execute(query)
+                processing_status_stats[pstatus] = result.scalar_one()
+
+            # Count pending manual review (NEW)
+            manual_review_query = select(func.count(Opportunity.id)).where(
+                Opportunity.requires_manual_review == True  # noqa: E712
+            )
+            manual_review_result = await self.session.execute(manual_review_query)
+            pending_manual_review = manual_review_result.scalar_one()
+
             return {
-                "total": total,
+                "total_count": total,
                 "by_tier": tier_stats,
                 "average_score": round(float(avg_score), 2),
+                "highest_score": highest_score,
+                "lowest_score": lowest_score,
                 "by_status": status_stats,
+                "by_conversation_state": conversation_state_stats,
+                "by_processing_status": processing_status_stats,
+                "pending_manual_review": pending_manual_review,
             }
 
         except Exception as e:
             logger.error("opportunity_stats_failed", error=str(e))
             raise DatabaseError(
                 message="Failed to get statistics",
+                details={"error": str(e)},
+            ) from e
+
+    async def get_manual_review_queue(
+        self,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> Sequence[Opportunity]:
+        """
+        Get opportunities that require manual review.
+
+        Args:
+            skip: Number of records to skip
+            limit: Maximum records to return
+
+        Returns:
+            Sequence[Opportunity]: List of opportunities needing manual review
+        """
+        try:
+            query = (
+                select(Opportunity)
+                .where(Opportunity.requires_manual_review == True)  # noqa: E712
+                .order_by(Opportunity.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+
+            result = await self.session.execute(query)
+            return result.scalars().all()
+
+        except Exception as e:
+            logger.error("manual_review_queue_failed", error=str(e))
+            raise DatabaseError(
+                message="Failed to get manual review queue",
+                details={"error": str(e)},
+            ) from e
+
+    async def count_manual_review(self) -> int:
+        """
+        Count opportunities requiring manual review.
+
+        Returns:
+            int: Count of opportunities needing manual review
+        """
+        try:
+            query = select(func.count(Opportunity.id)).where(
+                Opportunity.requires_manual_review == True  # noqa: E712
+            )
+            result = await self.session.execute(query)
+            return result.scalar_one()
+
+        except Exception as e:
+            logger.error("manual_review_count_failed", error=str(e))
+            raise DatabaseError(
+                message="Failed to count manual review queue",
                 details={"error": str(e)},
             ) from e
 
@@ -595,6 +685,28 @@ class PendingResponseRepository(BaseRepository):
             logger.error("pending_response_list_failed", error=str(e))
             raise DatabaseError(
                 message="Failed to list pending responses",
+                details={"error": str(e)},
+            ) from e
+
+    async def count_pending(self) -> int:
+        """
+        Count pending responses.
+
+        Returns:
+            Total count of pending responses
+        """
+        try:
+            result = await self.session.execute(
+                select(func.count(PendingResponse.id)).where(
+                    PendingResponse.status == "pending"
+                )
+            )
+            return result.scalar_one()
+
+        except Exception as e:
+            logger.error("pending_response_count_failed", error=str(e))
+            raise DatabaseError(
+                message="Failed to count pending responses",
                 details={"error": str(e)},
             ) from e
 

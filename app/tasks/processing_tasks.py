@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import PipelineError
 from app.core.logging import get_logger
 from app.database.base import AsyncSessionLocal as async_session
-from app.database.repositories import OpportunityRepository
+from app.database.repositories import OpportunityRepository, PendingResponseRepository
 from app.dspy_modules.pipeline import get_pipeline
 from app.dspy_modules.profile_loader import get_profile
 from app.tasks.celery_app import celery_app
@@ -74,35 +74,26 @@ def process_message(
             async with async_session() as session:
                 repo = OpportunityRepository(session)
 
-                opportunity = await repo.create(
-                    recruiter_name=result.recruiter_name,
-                    raw_message=raw_message,
-                    # Extracted data
-                    company=result.extracted.company,
-                    role=result.extracted.role,
-                    seniority=result.extracted.seniority,
-                    tech_stack=result.extracted.tech_stack,
-                    salary_min=result.extracted.salary_min,
-                    salary_max=result.extracted.salary_max,
-                    currency=result.extracted.currency,
-                    location=result.extracted.location,
-                    remote_policy=result.extracted.remote_policy,
-                    job_type=result.extracted.job_type,
-                    # Scoring
-                    tech_stack_score=result.scoring.tech_stack_score,
-                    salary_score=result.scoring.salary_score,
-                    seniority_score=result.scoring.seniority_score,
-                    company_score=result.scoring.company_score,
-                    total_score=result.scoring.total_score,
-                    tier=result.scoring.tier,
-                    # Response
-                    ai_response=result.ai_response,
-                    # Metadata
-                    status="processed",
-                    processing_time_ms=int(result.processing_time * 1000),
-                )
+                # Use to_db_dict for comprehensive field mapping
+                db_data = result.to_db_dict()
+                opportunity = await repo.create(**db_data)
 
                 await session.commit()
+
+                # Create pending response if AI response was generated
+                if opportunity.ai_response:
+                    response_repo = PendingResponseRepository(session)
+                    await response_repo.create(
+                        opportunity_id=opportunity.id,
+                        original_response=opportunity.ai_response,
+                        status="pending",
+                    )
+                    await session.commit()
+
+                    logger.info(
+                        "pending_response_created",
+                        opportunity_id=opportunity.id,
+                    )
 
                 return opportunity
 
@@ -197,10 +188,20 @@ def process_opportunity(opportunity_id: int) -> Dict:
                 tier=result.scoring.tier,
                 ai_response=result.ai_response,
                 status="reprocessed",
-                processing_time_ms=int(result.processing_time * 1000),
+                processing_time_ms=result.processing_time_ms,
             )
 
             await session.commit()
+
+            # Create new pending response if AI response was regenerated
+            if result.ai_response:
+                response_repo = PendingResponseRepository(session)
+                await response_repo.create(
+                    opportunity_id=opportunity_id,
+                    original_response=result.ai_response,
+                    status="pending",
+                )
+                await session.commit()
 
             return updated
 

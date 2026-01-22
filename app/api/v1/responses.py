@@ -50,6 +50,15 @@ class ResponseData(BaseModel):
     updated_at: str
 
 
+class ResponseListResponse(BaseModel):
+    """Paginated response list."""
+
+    items: list[ResponseData]
+    total: int
+    skip: int
+    limit: int
+
+
 @router.post("/{opportunity_id}/approve", response_model=ResponseData, status_code=status.HTTP_200_OK)
 async def approve_response(
     opportunity_id: int,
@@ -271,7 +280,7 @@ async def get_response(
     return ResponseData(**pending_response.to_dict())
 
 
-@router.get("/", response_model=list[ResponseData], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=ResponseListResponse, status_code=status.HTTP_200_OK)
 async def list_pending_responses(
     skip: int = 0,
     limit: int = 10,
@@ -286,7 +295,13 @@ async def list_pending_responses(
         repository: Response repository
 
     Returns:
-        List of pending responses
+        Paginated list of pending responses
     """
     responses = await repository.list_pending(skip=skip, limit=limit)
-    return [ResponseData(**response.to_dict()) for response in responses]
+    total = await repository.count_pending()
+    return ResponseListResponse(
+        items=[ResponseData(**response.to_dict()) for response in responses],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )

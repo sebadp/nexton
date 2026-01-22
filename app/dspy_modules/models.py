@@ -394,6 +394,29 @@ class OpportunityResult(BaseModel):
         Returns:
             dict: Data ready for Opportunity model
         """
+        # Build hard filter results dict if available
+        hard_filter_results = None
+        if self.hard_filter_result:
+            hard_filter_results = {
+                "passed": self.hard_filter_result.passed,
+                "failed_filters": self.hard_filter_result.failed_filters,
+                "score_penalty": self.hard_filter_result.score_penalty,
+                "should_decline": self.hard_filter_result.should_decline,
+                "work_week_status": self.hard_filter_result.work_week_status,
+            }
+
+        # Build follow-up analysis dict if available
+        follow_up_analysis = None
+        if self.follow_up_analysis:
+            follow_up_analysis = {
+                "can_auto_respond": self.follow_up_analysis.can_auto_respond,
+                "question_type": self.follow_up_analysis.question_type,
+                "detected_question": self.follow_up_analysis.detected_question,
+                "suggested_response": self.follow_up_analysis.suggested_response,
+                "reasoning": self.follow_up_analysis.reasoning,
+                "requires_context": self.follow_up_analysis.requires_context,
+            }
+
         return {
             "recruiter_name": self.recruiter_name,
             "raw_message": self.raw_message,
@@ -416,6 +439,15 @@ class OpportunityResult(BaseModel):
             "tier": self.scoring.tier,
             # Response
             "ai_response": self.ai_response,
+            # Conversation classification
+            "conversation_state": self.conversation_state.state.value if self.conversation_state else None,
+            "processing_status": self.status,
+            # Manual review
+            "requires_manual_review": self.requires_manual_review,
+            "manual_review_reason": self.manual_review_reason,
+            # Filter and analysis results (JSON)
+            "hard_filter_results": hard_filter_results,
+            "follow_up_analysis": follow_up_analysis,
             # Metadata
             "status": self.status,
             "processing_time_ms": self.processing_time_ms,

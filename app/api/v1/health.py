@@ -74,7 +74,6 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     checks = {
         "database": False,
         "redis": False,
-        "ollama": False,
     }
 
     # Check PostgreSQL
@@ -101,34 +100,39 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     except Exception as e:
         logger.error("redis_check", status="unhealthy", error=str(e))
 
-    # Check Ollama
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{settings.OLLAMA_URL}/api/tags")
-            if response.status_code == 200:
-                checks["ollama"] = True
-                logger.debug("ollama_check", status="healthy")
-            else:
-                logger.warning(
-                    "ollama_check",
-                    status="unhealthy",
-                    status_code=response.status_code,
-                )
-    except Exception as e:
-        logger.error("ollama_check", status="unhealthy", error=str(e))
+    # Check Ollama (only if using Ollama as LLM provider)
+    if settings.LLM_PROVIDER == "ollama":
+        checks["ollama"] = False
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{settings.OLLAMA_URL}/api/tags")
+                if response.status_code == 200:
+                    checks["ollama"] = True
+                    logger.debug("ollama_check", status="healthy")
+                else:
+                    logger.warning(
+                        "ollama_check",
+                        status="unhealthy",
+                        status_code=response.status_code,
+                    )
+        except Exception as e:
+            logger.error("ollama_check", status="unhealthy", error=str(e))
 
     # Determine overall status
     all_healthy = all(checks.values())
     status_code = status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
 
+    details = {
+        "database": "PostgreSQL connection" if checks["database"] else "PostgreSQL unavailable",
+        "redis": "Redis connection" if checks["redis"] else "Redis unavailable",
+    }
+    if "ollama" in checks:
+        details["ollama"] = "Ollama API" if checks["ollama"] else "Ollama unavailable"
+
     response_data = {
         "status": "ready" if all_healthy else "not_ready",
         "checks": checks,
-        "details": {
-            "database": "PostgreSQL connection" if checks["database"] else "PostgreSQL unavailable",
-            "redis": "Redis connection" if checks["redis"] else "Redis unavailable",
-            "ollama": "Ollama API" if checks["ollama"] else "Ollama unavailable",
-        },
+        "details": details,
     }
 
     logger.info(
@@ -136,7 +140,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
         status=response_data["status"],
         database=checks["database"],
         redis=checks["redis"],
-        ollama=checks["ollama"],
+        ollama=checks.get("ollama", "skipped"),
     )
 
     return JSONResponse(

@@ -20,13 +20,20 @@ Automate your LinkedIn job search with enterprise-grade AI. Analyze recruiter me
 | **[Full Version](#-quick-start)** | Production, teams, full observability | PostgreSQL, Redis, Celery, Docker |
 | **[Lite Version](docs/TESTING_GUIDE.md#lite-version-no-infrastructure)** | Quick testing, low resources, learning | Just Python + LLM |
 
-**New here?** Start with the [Lite Version](docs/TESTING_GUIDE.md#lite-version-no-infrastructure) - no Docker required!
+**New here?** Start with the Full Version - includes a modern web dashboard!
 
 ```bash
-# Lite Version - Run in 2 minutes
-pip install -r requirements-lite.txt && playwright install chromium
-python scripts/run_lite.py --sample
+# Full Version - Start in 3 commands
+git clone <repository-url> && cd nexton
+cp .env.example .env  # Edit with your LinkedIn credentials
+docker-compose up -d  # Open http://localhost:3000
 ```
+
+### Web Dashboard Preview
+
+| Dashboard | Opportunities | Responses |
+|:---------:|:-------------:|:---------:|
+| Stats, charts, scan button | Filter, search, score breakdown | Approve, edit, decline AI responses |
 
 ---
 
@@ -36,6 +43,7 @@ python scripts/run_lite.py --sample
 - [The Problem](#-the-problem)
 - [The Solution](#-the-solution)
 - [Key Features](#-key-features)
+- [Web Dashboard](#-web-dashboard)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Quick Start](#-quick-start)
@@ -168,6 +176,47 @@ Track everything:
 
 ---
 
+## 🖥️ Web Dashboard
+
+A modern React dashboard for managing your LinkedIn opportunities - no command line needed!
+
+### Access
+
+After starting the application, open **http://localhost:3000**
+
+### Pages
+
+| Page | URL | Description |
+|------|-----|-------------|
+| **Dashboard** | `/dashboard` | Overview with stats, charts, and "Scan LinkedIn" button |
+| **Opportunities** | `/opportunities` | Browse all opportunities with filters and search |
+| **Opportunity Detail** | `/opportunities/:id` | Full details, score breakdown, AI response |
+| **Responses** | `/responses` | Approve, edit, or decline pending AI responses |
+| **Profile** | `/profile` | Configure your preferences (tech stack, salary, etc.) |
+| **Settings** | `/settings` | LLM config, LinkedIn credentials, notifications |
+
+### Key Features
+
+- **Scan LinkedIn Button**: Trigger scraping directly from the dashboard
+- **Real-time Status**: See scraping progress and health status
+- **Smart Filtering**: Filter opportunities by tier, status, score, company
+- **Response Management**: Review AI responses before sending
+- **Profile Editor**: Visual editor for all your preferences
+- **Mobile Responsive**: Works on desktop and mobile
+
+### Tech Stack (Frontend)
+
+- **React 18** + TypeScript
+- **Vite** for fast development
+- **Tailwind CSS** + shadcn/ui components
+- **React Query** for server state
+- **Zustand** for UI state
+- **Recharts** for visualizations
+
+See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the complete user guide.
+
+---
+
 ## 🏗️ Architecture
 
 ```
@@ -175,6 +224,16 @@ Track everything:
 │                         LinkedIn AI Agent                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │                     Frontend (React)                          │ │
+│  │                                                               │ │
+│  │   Dashboard ─── Opportunities ─── Responses ─── Profile      │ │
+│  │       │              │                │            │          │ │
+│  │       └──────────────┴────────────────┴────────────┘          │ │
+│  │                           │                                    │ │
+│  │                      REST API                                  │ │
+│  └───────────────────────────┬───────────────────────────────────┘ │
+│                              ▼                                      │
 │  ┌───────────────────────────────────────────────────────────────┐ │
 │  │                    Application Layer                          │ │
 │  │                                                               │ │
@@ -392,12 +451,13 @@ Once the system is running, access these dashboards:
 
 | Service | URL | Credentials | Purpose |
 |---------|-----|-------------|---------|
+| **Web Dashboard** | http://localhost:3000 | - | Main application UI |
 | **API Docs** | http://localhost:8000/docs | - | Interactive API testing |
-| **Mailpit** | http://localhost:8025 | - | View daily summary emails (dev) |
-| **Grafana** | http://localhost:3000 | admin/admin | Metrics dashboards |
+| **Mailpit** | http://localhost:8025 | - | View emails in development |
+| **Flower** | http://localhost:5555 | admin/admin | Celery task monitoring |
+| **Grafana** | http://localhost:3001 | admin/admin | Metrics dashboards (with monitoring stack) |
 | **Prometheus** | http://localhost:9090 | - | Raw metrics queries |
 | **Jaeger** | http://localhost:16686 | - | Request tracing |
-| **Flower** | http://localhost:5555 | admin/admin | Celery tasks |
 
 ### Key Metrics
 
@@ -781,6 +841,7 @@ Comprehensive documentation available in [`docs/`](docs/):
 
 | Document | Description |
 |----------|-------------|
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | **Start here!** Complete user guide with frontend |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and data flow |
 | [API.md](docs/API.md) | Complete API reference |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment guide |

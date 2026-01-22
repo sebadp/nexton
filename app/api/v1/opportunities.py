@@ -24,7 +24,7 @@ from app.core.exceptions import DatabaseError, OpportunityNotFoundError, Pipelin
 from app.core.logging import get_logger
 from app.database.dependencies import get_db
 from app.database.models import Opportunity
-from app.database.repositories import OpportunityRepository
+from app.database.repositories import OpportunityRepository, PendingResponseRepository
 from app.dspy_modules.pipeline import get_pipeline
 from app.dspy_modules.profile_loader import get_profile
 
@@ -59,6 +59,14 @@ def _opportunity_to_response(opportunity: Opportunity) -> OpportunityResponse:
         total_score=opportunity.total_score,
         tier=opportunity.tier,
         ai_response=opportunity.ai_response,
+        # New classification fields
+        conversation_state=opportunity.conversation_state,
+        processing_status=opportunity.processing_status,
+        requires_manual_review=opportunity.requires_manual_review,
+        manual_review_reason=opportunity.manual_review_reason,
+        hard_filter_results=opportunity.hard_filter_results,
+        follow_up_analysis=opportunity.follow_up_analysis,
+        # Metadata
         status=opportunity.status,
         processing_time_ms=opportunity.processing_time_ms,
         created_at=opportunity.created_at,
@@ -120,34 +128,27 @@ async def create_opportunity(
             profile=profile,
         )
 
-        # Create opportunity in database
+        # Create opportunity in database using to_db_dict for all fields
         repo = OpportunityRepository(db)
-        opportunity = await repo.create(
-            recruiter_name=result.recruiter_name,
-            raw_message=result.raw_message,
-            # Extracted data
-            company=result.extracted.company,
-            role=result.extracted.role,
-            seniority=result.extracted.seniority,
-            tech_stack=result.extracted.tech_stack,
-            salary_min=result.extracted.salary_min,
-            salary_max=result.extracted.salary_max,
-            currency=result.extracted.currency,
-            remote_policy=result.extracted.remote_policy,
-            location=result.extracted.location,
-            # Scores
-            tech_stack_score=result.scoring.tech_stack_score,
-            salary_score=result.scoring.salary_score,
-            seniority_score=result.scoring.seniority_score,
-            company_score=result.scoring.company_score,
-            total_score=result.scoring.total_score,
-            tier=result.scoring.tier,
-            # AI Response
-            ai_response=result.ai_response,
-            # Metadata
-            status=result.status,
-            processing_time_ms=result.processing_time_ms,
-        )
+        db_data = result.to_db_dict()
+        opportunity = await repo.create(**db_data)
+
+        await db.commit()
+
+        # Create pending response if AI response was generated
+        if opportunity.ai_response:
+            response_repo = PendingResponseRepository(db)
+            await response_repo.create(
+                opportunity_id=opportunity.id,
+                original_response=opportunity.ai_response,
+                status="pending",
+            )
+            await db.commit()
+
+            logger.info(
+                "pending_response_created",
+                opportunity_id=opportunity.id,
+            )
 
         logger.info(
             "opportunity_created",
@@ -269,6 +270,61 @@ async def list_opportunities(
 
 
 @router.get(
+    "/manual-review",
+    response_model=OpportunityListResponse,
+    summary="Get manual review queue",
+    description="Get opportunities that require manual human review",
+)
+async def get_manual_review_queue(
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
+    db: AsyncSession = Depends(get_db),
+) -> OpportunityListResponse:
+    """
+    Get opportunities that require manual review.
+
+    These are typically follow-up messages that require human judgment
+    to respond appropriately.
+
+    Args:
+        skip: Number of items to skip (offset)
+        limit: Number of items to return (max 100)
+        db: Database session
+
+    Returns:
+        Paginated list of opportunities needing manual review
+    """
+    logger.debug("get_manual_review_queue_request", skip=skip, limit=limit)
+
+    try:
+        repo = OpportunityRepository(db)
+
+        # Get manual review queue
+        opportunities = await repo.get_manual_review_queue(skip=skip, limit=limit)
+
+        # Get total count
+        total = await repo.count_manual_review()
+
+        # Convert to response models
+        items = [_opportunity_to_response(opp) for opp in opportunities]
+
+        return OpportunityListResponse(
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+            has_more=(skip + len(items)) < total,
+        )
+
+    except DatabaseError as e:
+        logger.error("database_error", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database operation failed: {e.message}",
+        ) from e
+
+
+@router.get(
     "/stats",
     response_model=OpportunityStats,
     summary="Get opportunity statistics",
@@ -329,7 +385,10 @@ async def get_opportunity(
         opportunity = await repo.get_by_id(opportunity_id)
 
         if not opportunity:
-            raise OpportunityNotFoundError(opportunity_id=opportunity_id)
+            raise OpportunityNotFoundError(
+                message=f"Opportunity {opportunity_id} not found",
+                details={"opportunity_id": opportunity_id},
+            )
 
         return _opportunity_to_response(opportunity)
 
@@ -375,7 +434,10 @@ async def delete_opportunity(
         deleted = await repo.delete(opportunity_id)
 
         if not deleted:
-            raise OpportunityNotFoundError(opportunity_id=opportunity_id)
+            raise OpportunityNotFoundError(
+                message=f"Opportunity {opportunity_id} not found",
+                details={"opportunity_id": opportunity_id},
+            )
 
         logger.info("opportunity_deleted", opportunity_id=opportunity_id)
 
@@ -429,7 +491,10 @@ async def update_opportunity(
         # Check if exists
         opportunity = await repo.get_by_id(opportunity_id)
         if not opportunity:
-            raise OpportunityNotFoundError(opportunity_id=opportunity_id)
+            raise OpportunityNotFoundError(
+                message=f"Opportunity {opportunity_id} not found",
+                details={"opportunity_id": opportunity_id},
+            )
 
         # Update
         update_data = opportunity_update.model_dump(exclude_unset=True)

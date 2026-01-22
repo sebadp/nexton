@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     TIMESTAMP,
@@ -79,6 +80,44 @@ class Opportunity(Base):
         comment="new, processing, processed, error, archived",
     )
 
+    # Conversation Classification (NEW)
+    conversation_state: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
+    )
+    processing_status: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="processed, ignored, declined, manual_review, auto_responded",
+    )
+
+    # Manual Review Tracking (NEW)
+    requires_manual_review: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    manual_review_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Reason why manual review is required",
+    )
+
+    # Hard Filter Results (NEW - JSON)
+    hard_filter_results: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Results from hard filter checks (work_week, salary, tech_match, etc.)",
+    )
+
+    # Follow-up Analysis (NEW - JSON)
+    follow_up_analysis: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
+    )
+
     # Raw Data
     raw_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -112,6 +151,9 @@ class Opportunity(Base):
         Index("idx_opportunities_company", "company"),
         Index("idx_opportunities_status", "status"),
         Index("idx_opportunities_tier_score", "tier", "total_score"),  # Composite index
+        Index("idx_opportunities_manual_review", "requires_manual_review"),
+        Index("idx_opportunities_conversation_state", "conversation_state"),
+        Index("idx_opportunities_processing_status", "processing_status"),
     )
 
     def __repr__(self) -> str:
@@ -146,6 +188,14 @@ class Opportunity(Base):
             "tier": self.tier,
             "ai_response": self.ai_response,
             "status": self.status,
+            # New classification fields
+            "conversation_state": self.conversation_state,
+            "processing_status": self.processing_status,
+            "requires_manual_review": self.requires_manual_review,
+            "manual_review_reason": self.manual_review_reason,
+            "hard_filter_results": self.hard_filter_results,
+            "follow_up_analysis": self.follow_up_analysis,
+            # Timestamps
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "processed_at": self.processed_at.isoformat() if self.processed_at else None,

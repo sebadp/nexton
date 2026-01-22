@@ -1,0 +1,192 @@
+"""
+Scraping API endpoints for triggering and monitoring LinkedIn scraping.
+"""
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.core.config import settings
+
+router = APIRouter(prefix="/scraping", tags=["scraping"])
+
+
+class ScrapingTriggerRequest(BaseModel):
+    """Request to trigger scraping."""
+    limit: int = 20
+    unread_only: bool = True
+    send_email: bool = False  # Disabled by default since we have frontend
+
+
+class ScrapingTriggerResponse(BaseModel):
+    """Response after triggering scraping."""
+    task_id: str
+    status: str
+    message: str
+
+
+class ScrapingStatusResponse(BaseModel):
+    """Scraping status response."""
+    is_running: bool
+    last_run: Optional[str] = None
+    last_run_status: Optional[str] = None
+    last_run_count: Optional[int] = None
+    task_id: Optional[str] = None
+    task_status: Optional[str] = None
+    task_progress: Optional[dict] = None
+
+
+# In-memory store for last run info (in production, use Redis)
+_scraping_state = {
+    "is_running": False,
+    "last_run": None,
+    "last_run_status": None,
+    "last_run_count": None,
+    "current_task_id": None,
+}
+
+
+@router.post("/trigger", response_model=ScrapingTriggerResponse)
+async def trigger_scraping(request: ScrapingTriggerRequest = ScrapingTriggerRequest()) -> ScrapingTriggerResponse:
+    """
+    Trigger LinkedIn message scraping.
+
+    This will:
+    1. Scrape unread messages from LinkedIn inbox
+    2. Process each message through the DSPy pipeline
+    3. Create opportunities in the database
+    4. Optionally send email summary (disabled by default)
+    """
+    global _scraping_state
+
+    if _scraping_state["is_running"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Scraping is already in progress. Please wait for it to complete."
+        )
+
+    try:
+        # Import here to avoid circular imports and allow lite mode
+        from app.tasks.scraping_tasks import scrape_linkedin_messages, scrape_and_send_daily_summary
+
+        _scraping_state["is_running"] = True
+        _scraping_state["current_task_id"] = None
+
+        if request.send_email:
+            # Use the full task with email
+            task = scrape_and_send_daily_summary.delay()
+        else:
+            # Use scraping without email
+            task = scrape_linkedin_messages.delay(
+                limit=request.limit,
+                unread_only=request.unread_only
+            )
+
+        _scraping_state["current_task_id"] = task.id
+
+        return ScrapingTriggerResponse(
+            task_id=task.id,
+            status="started",
+            message=f"Scraping task started. Fetching up to {request.limit} {'unread ' if request.unread_only else ''}messages."
+        )
+
+    except ImportError:
+        _scraping_state["is_running"] = False
+        raise HTTPException(
+            status_code=503,
+            detail="Celery tasks not available. Running in lite mode?"
+        )
+    except Exception as e:
+        _scraping_state["is_running"] = False
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start scraping: {str(e)}"
+        )
+
+
+@router.get("/status", response_model=ScrapingStatusResponse)
+async def get_scraping_status() -> ScrapingStatusResponse:
+    """Get the current scraping status and last run info."""
+    global _scraping_state
+
+    task_status = None
+    task_progress = None
+
+    # Check if there's a running task
+    if _scraping_state["current_task_id"]:
+        try:
+            from celery.result import AsyncResult
+            from app.tasks.celery_app import celery_app
+
+            result = AsyncResult(_scraping_state["current_task_id"], app=celery_app)
+            task_status = result.status
+
+            if result.ready():
+                # Task completed
+                _scraping_state["is_running"] = False
+                _scraping_state["last_run"] = datetime.utcnow().isoformat()
+
+                if result.successful():
+                    task_result = result.result
+                    _scraping_state["last_run_status"] = "success"
+                    _scraping_state["last_run_count"] = task_result.get("processed_count", 0) if isinstance(task_result, dict) else 0
+                else:
+                    _scraping_state["last_run_status"] = "failed"
+                    _scraping_state["last_run_count"] = 0
+
+                _scraping_state["current_task_id"] = None
+
+            elif result.state == "PROGRESS":
+                task_progress = result.info
+
+        except ImportError:
+            pass
+        except Exception:
+            # If we can't check task status, assume it's done
+            _scraping_state["is_running"] = False
+
+    return ScrapingStatusResponse(
+        is_running=_scraping_state["is_running"],
+        last_run=_scraping_state["last_run"],
+        last_run_status=_scraping_state["last_run_status"],
+        last_run_count=_scraping_state["last_run_count"],
+        task_id=_scraping_state["current_task_id"],
+        task_status=task_status,
+        task_progress=task_progress,
+    )
+
+
+@router.post("/cancel")
+async def cancel_scraping() -> dict:
+    """Cancel the current scraping task if running."""
+    global _scraping_state
+
+    if not _scraping_state["is_running"] or not _scraping_state["current_task_id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No scraping task is currently running."
+        )
+
+    try:
+        from celery.result import AsyncResult
+        from app.tasks.celery_app import celery_app
+
+        result = AsyncResult(_scraping_state["current_task_id"], app=celery_app)
+        result.revoke(terminate=True)
+
+        _scraping_state["is_running"] = False
+        _scraping_state["current_task_id"] = None
+
+        return {"status": "cancelled", "message": "Scraping task has been cancelled."}
+
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Celery not available."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cancel task: {str(e)}"
+        )
