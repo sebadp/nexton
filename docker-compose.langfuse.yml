@@ -1,0 +1,62 @@
+# Docker Compose for Langfuse (LLM Observability)
+#
+# This is a SEPARATE compose file for optional Langfuse deployment.
+# Usage: docker-compose -f docker-compose.langfuse.yml up -d
+#
+# After starting:
+# 1. Open http://localhost:3001
+# 2. Create an account and project
+# 3. Copy API keys to your .env file
+# 4. Set LANGFUSE_ENABLED=true
+
+version: '3.8'
+
+services:
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: langfuse
+    ports:
+      - "3001:3000"  # Using 3001 to avoid conflict with frontend (3000)
+    environment:
+      # Database connection (uses the same postgres from main docker-compose)
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+      
+      # NextAuth configuration
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-production}
+      NEXTAUTH_URL: http://localhost:3001
+      SALT: ${LANGFUSE_SALT:-change-me-in-production}
+      
+      # Disable telemetry
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      - postgres
+    networks:
+      - linkedin-agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Postgres service (if not using the one from main docker-compose)
+  # Uncomment if running Langfuse standalone
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: langfuse-postgres
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: langfuse
+  #   volumes:
+  #     - langfuse_postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - linkedin-agent-network
+
+networks:
+  linkedin-agent-network:
+    external: true
+
+# volumes:
+#   langfuse_postgres_data:

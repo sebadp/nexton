@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     OTEL_EXCLUDED_URLS: str = "/health,/metrics,/docs,/redoc,/openapi.json"
     PROMETHEUS_MULTIPROC_DIR: str = "/tmp/prometheus"
 
+    # LLM Observability (Langfuse) - Optional
+    LANGFUSE_ENABLED: bool = False  # Opt-in, disabled by default
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_HOST: str = "http://localhost:3001"  # Self-hosted default
+
     # LinkedIn
     LINKEDIN_EMAIL: str = ""
     LINKEDIN_PASSWORD: str = ""

@@ -456,6 +456,13 @@ def get_pipeline() -> OpportunityPipeline:
         # Configure DSPy first
         configure_dspy()
 
+        # Initialize Langfuse for LLM observability (optional)
+        try:
+            from app.observability.langfuse_setup import setup_langfuse
+            setup_langfuse()
+        except ImportError:
+            pass  # Langfuse not installed, continue without it
+
         # Create pipeline
         _pipeline_instance = OpportunityPipeline()
         logger.info("pipeline_instance_created")
