@@ -27,6 +27,17 @@ from app.observability.tracing import (
     setup_tracing,
 )
 
+# Langfuse LLM Observability (optional)
+from app.observability.langfuse_setup import (
+    setup_langfuse,
+    is_langfuse_enabled,
+    get_langfuse_client,
+    trace_pipeline_execution as langfuse_trace_pipeline,
+    score_current_trace,
+    update_current_trace,
+    flush_langfuse,
+)
+
 __all__ = [
     # Tracing
     "setup_tracing",
@@ -48,4 +59,13 @@ __all__ = [
     "track_cache_operation",
     "track_db_query",
     "update_opportunities_by_tier",
+    # Langfuse (LLM Observability)
+    "setup_langfuse",
+    "is_langfuse_enabled",
+    "get_langfuse_client",
+    "langfuse_trace_pipeline",
+    "score_current_trace",
+    "update_current_trace",
+    "flush_langfuse",
 ]
+
