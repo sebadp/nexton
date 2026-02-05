@@ -8,7 +8,6 @@ Provides REST API for managing LinkedIn opportunities:
 - Delete
 - Statistics
 """
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -190,13 +189,13 @@ async def create_opportunity(
 async def list_opportunities(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
-    tier: Optional[str] = Query(
+    tier: str | None = Query(
         None,
         description="Filter by tier (HIGH_PRIORITY, INTERESANTE, POCO_INTERESANTE, NO_INTERESA)",
     ),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score"),
-    company: Optional[str] = Query(None, description="Filter by company name"),
+    opp_status: str | None = Query(None, alias="status", description="Filter by status"),
+    min_score: int | None = Query(None, ge=0, le=100, description="Minimum score"),
+    company: str | None = Query(None, description="Filter by company name"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
     db: AsyncSession = Depends(get_db),
@@ -235,7 +234,7 @@ async def list_opportunities(
             skip=skip,
             limit=limit,
             tier=tier,
-            status=status,
+            status=opp_status,
             min_score=min_score,
             company=company,
             sort_by=sort_by,
@@ -245,7 +244,7 @@ async def list_opportunities(
         # Get total count
         total = await repo.count(
             tier=tier,
-            status=status,
+            status=opp_status,
             min_score=min_score,
             company=company,
         )
@@ -431,15 +430,8 @@ async def delete_opportunity(
 
     try:
         repo = OpportunityRepository(db)
-        deleted = await repo.delete(opportunity_id)
-
-        if not deleted:
-            raise OpportunityNotFoundError(
-                message=f"Opportunity {opportunity_id} not found",
-                details={"opportunity_id": opportunity_id},
-            )
-
-        logger.info("opportunity_deleted", opportunity_id=opportunity_id)
+        await repo.delete(opportunity_id)
+        return None
 
     except OpportunityNotFoundError as e:
         logger.warning("opportunity_not_found", opportunity_id=opportunity_id)

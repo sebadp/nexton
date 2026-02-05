@@ -2,9 +2,10 @@
 Integration tests for OpportunityService with caching, tracing, and metrics.
 """
 
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.cache import RedisCache
 from app.database.models import Opportunity
@@ -110,7 +111,9 @@ async def mock_db_session():
 @pytest.fixture
 def service(mock_db_session, mock_cache, mock_repository, mock_pipeline, mock_profile):
     """Create OpportunityService with mocked dependencies."""
-    with patch("app.services.opportunity_service.OpportunityRepository", return_value=mock_repository):
+    with patch(
+        "app.services.opportunity_service.OpportunityRepository", return_value=mock_repository
+    ):
         with patch("app.services.opportunity_service.get_pipeline", return_value=mock_pipeline):
             with patch("app.services.opportunity_service.get_profile", return_value=mock_profile):
                 service = OpportunityService(db=mock_db_session, cache=mock_cache)

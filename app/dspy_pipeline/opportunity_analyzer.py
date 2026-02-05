@@ -4,9 +4,8 @@ Opportunity Analyzer using DSPy.
 Analyzes LinkedIn messages to extract opportunity details and calculate match scores.
 """
 
-from typing import Optional
-from pydantic import BaseModel, Field
 import dspy
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -19,13 +18,13 @@ class OpportunityAnalysis(BaseModel):
     """Structured output for opportunity analysis."""
 
     # Extracted information
-    company_name: Optional[str] = Field(None, description="Company name")
-    role_title: Optional[str] = Field(None, description="Job title/role")
-    salary_range: Optional[str] = Field(None, description="Salary range (e.g., '$100k-$150k')")
-    location: Optional[str] = Field(None, description="Job location")
-    work_mode: Optional[str] = Field(None, description="remote, hybrid, or onsite")
+    company_name: str | None = Field(None, description="Company name")
+    role_title: str | None = Field(None, description="Job title/role")
+    salary_range: str | None = Field(None, description="Salary range (e.g., '$100k-$150k')")
+    location: str | None = Field(None, description="Job location")
+    work_mode: str | None = Field(None, description="remote, hybrid, or onsite")
     tech_stack: list[str] = Field(default_factory=list, description="Technologies mentioned")
-    seniority_level: Optional[str] = Field(None, description="junior, mid, senior, staff, principal")
+    seniority_level: str | None = Field(None, description="junior, mid, senior, staff, principal")
 
     # Scores (0-100)
     tech_match_score: int = Field(0, ge=0, le=100, description="Tech stack match score")
@@ -53,10 +52,14 @@ class AnalyzeOpportunity(dspy.Signature):
     location: str = dspy.OutputField(desc="Location or 'Not mentioned'")
     work_mode: str = dspy.OutputField(desc="'remote', 'hybrid', 'onsite', or 'Not mentioned'")
     tech_stack: str = dspy.OutputField(desc="Comma-separated list of technologies or 'None'")
-    seniority_level: str = dspy.OutputField(desc="'junior', 'mid', 'senior', 'staff', 'principal', or 'Not mentioned'")
+    seniority_level: str = dspy.OutputField(
+        desc="'junior', 'mid', 'senior', 'staff', 'principal', or 'Not mentioned'"
+    )
 
     # Analysis
-    is_opportunity: str = dspy.OutputField(desc="'yes' if this is a job opportunity, 'no' otherwise")
+    is_opportunity: str = dspy.OutputField(
+        desc="'yes' if this is a job opportunity, 'no' otherwise"
+    )
     summary: str = dspy.OutputField(desc="One sentence summary of the opportunity")
 
 
@@ -195,13 +198,21 @@ class OpportunityAnalyzer:
 
             # Create result
             result = OpportunityAnalysis(
-                company_name=extraction.company_name if extraction.company_name != "Unknown" else None,
+                company_name=(
+                    extraction.company_name if extraction.company_name != "Unknown" else None
+                ),
                 role_title=extraction.role_title if extraction.role_title != "Unknown" else None,
-                salary_range=extraction.salary_range if extraction.salary_range != "Not mentioned" else None,
+                salary_range=(
+                    extraction.salary_range if extraction.salary_range != "Not mentioned" else None
+                ),
                 location=extraction.location if extraction.location != "Not mentioned" else None,
                 work_mode=extraction.work_mode if extraction.work_mode != "Not mentioned" else None,
                 tech_stack=tech_stack,
-                seniority_level=extraction.seniority_level if extraction.seniority_level != "Not mentioned" else None,
+                seniority_level=(
+                    extraction.seniority_level
+                    if extraction.seniority_level != "Not mentioned"
+                    else None
+                ),
                 tech_match_score=tech_match_score,
                 salary_match_score=salary_match_score,
                 seniority_match_score=seniority_match_score,

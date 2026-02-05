@@ -1,6 +1,7 @@
 """
 Profile API endpoints for managing user profile (profile.yaml).
 """
+
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 class JobSearchStatus(BaseModel):
     """Job search status configuration."""
+
     currently_employed: bool = True
     actively_looking: bool = True
     urgency: str = "selective"
@@ -26,6 +28,7 @@ class JobSearchStatus(BaseModel):
 
 class ProfileSchema(BaseModel):
     """User profile schema."""
+
     name: str = ""
     preferred_technologies: list[str] = Field(default_factory=list)
     years_of_experience: int = 0
@@ -53,7 +56,7 @@ def _load_profile() -> dict[str, Any]:
     if not profile_path.exists():
         return {}
 
-    with open(profile_path, "r") as f:
+    with open(profile_path) as f:
         return yaml.safe_load(f) or {}
 
 
@@ -73,7 +76,7 @@ async def get_profile() -> ProfileSchema:
         data = _load_profile()
         return ProfileSchema(**data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load profile: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load profile: {str(e)}") from e
 
 
 @router.put("", response_model=ProfileSchema)
@@ -84,4 +87,4 @@ async def update_profile(profile: ProfileSchema) -> ProfileSchema:
         _save_profile(data)
         return profile
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}") from e

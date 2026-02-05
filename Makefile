@@ -167,6 +167,11 @@ format-check:  ## Check code formatting
 type-check:  ## Run type checking
 	poetry run mypy app/
 
+check:  ## Run all local validations (lint + format check + test)
+	$(MAKE) lint
+	$(MAKE) test-unit
+
+
 security:  ## Run security scans
 	@echo "🔒 Running security scans..."
 	poetry run bandit -r app/ -ll

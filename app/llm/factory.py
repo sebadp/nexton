@@ -4,8 +4,6 @@ LLM Factory for creating and managing LLM providers.
 Provides centralized provider instantiation and configuration.
 """
 
-from typing import Optional
-
 from app.core.config import settings
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
@@ -20,20 +18,17 @@ logger = get_logger(__name__)
 class LLMFactory:
     """Factory for creating LLM providers."""
 
-    _providers = {
+    _providers: dict[str, type[LLMProvider]] = {
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
         "ollama": OllamaProvider,
     }
 
-    _instances = {}  # Cache instances
+    _instances: dict[str, LLMProvider] = {}  # Cache instances
 
     @classmethod
     def create_provider(
-        cls,
-        provider_type: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        cls, provider_type: str | None = None, model: str | None = None, **kwargs
     ) -> LLMProvider:
         """
         Create LLM provider instance.
@@ -98,7 +93,7 @@ class LLMFactory:
             extra={
                 "provider": provider_type,
                 "model": model,
-            }
+            },
         )
 
         return provider_class(**provider_kwargs)
@@ -106,8 +101,8 @@ class LLMFactory:
     @classmethod
     def get_cached_provider(
         cls,
-        provider_type: Optional[str] = None,
-        model: Optional[str] = None,
+        provider_type: str | None = None,
+        model: str | None = None,
     ) -> LLMProvider:
         """
         Get cached provider instance or create new one.
@@ -161,7 +156,7 @@ class LLMFactory:
                 "module": module_name,
                 "provider": provider_type,
                 "model": model,
-            }
+            },
         )
 
         return cls.create_provider(provider_type, model)
@@ -174,8 +169,8 @@ class LLMFactory:
 
 
 def get_llm_provider(
-    provider_type: Optional[str] = None,
-    model: Optional[str] = None,
+    provider_type: str | None = None,
+    model: str | None = None,
     cached: bool = True,
 ) -> LLMProvider:
     """

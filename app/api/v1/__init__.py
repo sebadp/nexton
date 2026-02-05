@@ -1,9 +1,10 @@
 """
 API v1 Router - Combines all v1 endpoints.
 """
+
 from fastapi import APIRouter
 
-from app.api.v1 import health, metrics, opportunities, responses, profile, settings, scraping
+from app.api.v1 import health, metrics, opportunities, profile, responses, scraping, settings
 
 # Create v1 router
 router = APIRouter(prefix="/api/v1")

@@ -5,8 +5,6 @@ Provides distributed tracing setup with automatic instrumentation for
 FastAPI, SQLAlchemy, Redis, and custom spans for DSPy operations.
 """
 
-from typing import Optional
-
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -125,7 +123,7 @@ class TracingContext:
     def __init__(
         self,
         span_name: str,
-        attributes: Optional[dict] = None,
+        attributes: dict | None = None,
         tracer_name: str = "app.custom",
     ):
         """
@@ -139,7 +137,7 @@ class TracingContext:
         self.span_name = span_name
         self.attributes = attributes or {}
         self.tracer = get_tracer(tracer_name)
-        self.span = None
+        self.span: trace.Span | None = None
 
     def __enter__(self):
         """Start span."""
@@ -179,7 +177,7 @@ def add_span_attributes(**attributes) -> None:
                 span.set_attribute(key, value)
 
 
-def add_span_event(name: str, attributes: Optional[dict] = None) -> None:
+def add_span_event(name: str, attributes: dict | None = None) -> None:
     """
     Add an event to the current span.
 

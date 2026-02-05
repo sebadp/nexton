@@ -34,7 +34,9 @@ def send_linkedin_response(self, response_id: int):
     Returns:
         dict: Result with status and message
     """
-    logger.info("starting_linkedin_response_send_task", response_id=response_id, task_id=self.request.id)
+    logger.info(
+        "starting_linkedin_response_send_task", response_id=response_id, task_id=self.request.id
+    )
 
     try:
         # Run the async send operation
@@ -69,7 +71,7 @@ def send_linkedin_response(self, response_id: int):
         )
 
         # Retry with exponential backoff
-        raise self.retry(exc=e)
+        raise self.retry(exc=e) from e
 
 
 async def _send_response_async(response_id: int) -> dict:
@@ -113,7 +115,9 @@ async def _send_response_async(response_id: int) -> dict:
             return {"success": success, "response_id": response_id}
 
     except Exception as e:
-        logger.error("send_response_async_failed", response_id=response_id, error=str(e), exc_info=True)
+        logger.error(
+            "send_response_async_failed", response_id=response_id, error=str(e), exc_info=True
+        )
         return {"success": False, "error": str(e)}
 
     finally:

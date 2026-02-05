@@ -4,8 +4,6 @@ OpenAI LLM provider implementation.
 Supports GPT-4, GPT-3.5-turbo, and other OpenAI models.
 """
 
-from typing import Optional
-
 from openai import AsyncOpenAI
 
 from app.core.logging import get_logger
@@ -38,7 +36,7 @@ class OpenAIProvider(LLMProvider):
         """
         super().__init__(model, **kwargs)
         self.client = AsyncOpenAI(api_key=api_key, **kwargs)
-        logger.info(f"openai_provider_initialized", extra={"model": model})
+        logger.info("openai_provider_initialized", extra={"model": model})
 
     @property
     def provider_name(self) -> str:
@@ -60,10 +58,10 @@ class OpenAIProvider(LLMProvider):
     async def complete(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion using OpenAI.
@@ -86,18 +84,15 @@ class OpenAIProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
 
         return await self.chat(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
+            messages=messages, temperature=temperature, max_tokens=max_tokens, **kwargs
         )
 
     async def chat(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion for chat messages.
@@ -118,15 +113,15 @@ class OpenAIProvider(LLMProvider):
                     "model": self.model,
                     "message_count": len(messages),
                     "temperature": temperature,
-                }
+                },
             )
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
+                messages=messages,  # type: ignore
                 temperature=temperature,
                 max_tokens=max_tokens,
-                **kwargs
+                **kwargs,
             )
 
             # Extract usage information
@@ -137,11 +132,9 @@ class OpenAIProvider(LLMProvider):
                     completion_tokens=response.usage.completion_tokens,
                     total_tokens=response.usage.total_tokens,
                 )
-                usage.cost_usd = self.calculate_cost(
-                    usage.prompt_tokens, usage.completion_tokens
-                )
+                usage.cost_usd = self.calculate_cost(usage.prompt_tokens, usage.completion_tokens)
 
-            content = response.choices[0].message.content
+            content = response.choices[0].message.content or ""
 
             logger.info(
                 "openai_request_completed",
@@ -149,7 +142,7 @@ class OpenAIProvider(LLMProvider):
                     "model": self.model,
                     "usage": usage.__dict__ if usage else None,
                     "cost_usd": usage.cost_usd if usage else 0,
-                }
+                },
             )
 
             return LLMResponse(
@@ -162,10 +155,7 @@ class OpenAIProvider(LLMProvider):
             )
 
         except Exception as e:
-            logger.error(
-                "openai_request_failed",
-                extra={"model": self.model, "error": str(e)}
-            )
+            logger.error("openai_request_failed", extra={"model": self.model, "error": str(e)})
             raise
 
     async def embed(self, text: str) -> list[float]:
@@ -180,15 +170,11 @@ class OpenAIProvider(LLMProvider):
         """
         try:
             response = await self.client.embeddings.create(
-                model="text-embedding-ada-002",
-                input=text
+                model="text-embedding-ada-002", input=text
             )
 
-            return response.data[0].embedding
+            return list(response.data[0].embedding)
 
         except Exception as e:
-            logger.error(
-                "openai_embedding_failed",
-                extra={"error": str(e)}
-            )
+            logger.error("openai_embedding_failed", extra={"error": str(e)})
             raise

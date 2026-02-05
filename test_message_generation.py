@@ -6,20 +6,19 @@ Scrapes real LinkedIn messages and generates AI responses without sending.
 Updated to show conversation state analysis and hard filter results.
 """
 
-
 import asyncio
 import os
-from datetime import datetime
 
 # Load environment variables FIRST, before importing app modules
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from app.scraper.linkedin_scraper import LinkedInScraper, ScraperConfig
+from app.core.config import settings
+from app.dspy_modules.models import ConversationState
 from app.dspy_modules.pipeline import OpportunityPipeline, configure_dspy
 from app.dspy_modules.profile_loader import get_profile, get_profile_dict
-from app.dspy_modules.models import ConversationState
-from app.core.config import settings
+from app.scraper.linkedin_scraper import LinkedInScraper, ScraperConfig
 
 
 def print_header(text: str):
@@ -104,7 +103,7 @@ async def main():
         # Show job search status
         job_status = profile_dict.get("job_search_status", {})
         print(f"  - Urgency: {job_status.get('urgency', 'moderate')}")
-        print(f"  - Must-have requirements:")
+        print("  - Must-have requirements:")
         for req in job_status.get("must_have", [])[:3]:
             print(f"      * {req}")
 
@@ -197,7 +196,9 @@ async def main():
                     emoji = get_state_emoji(state.state)
                     print(f"   State: {emoji} {state.state.value}")
                     print(f"   Confidence: {state.confidence}")
-                    print(f"   Contains job details: {'Yes' if state.contains_job_details else 'No'}")
+                    print(
+                        f"   Contains job details: {'Yes' if state.contains_job_details else 'No'}"
+                    )
                     print(f"   Should process: {'Yes' if state.should_process else 'No'}")
                     print(f"   Reasoning: {state.reasoning}")
 
@@ -216,11 +217,15 @@ async def main():
                 print(f"   Company: {result.extracted.company}")
                 print(f"   Role: {result.extracted.role}")
                 print(f"   Seniority: {result.extracted.seniority}")
-                print(f"   Tech Stack: {', '.join(result.extracted.tech_stack[:5]) if result.extracted.tech_stack else 'N/A'}")
-                print(f"   Salary: ", end="")
+                print(
+                    f"   Tech Stack: {', '.join(result.extracted.tech_stack[:5]) if result.extracted.tech_stack else 'N/A'}"
+                )
+                print("   Salary: ", end="")
                 if result.extracted.salary_min:
                     if result.extracted.salary_max:
-                        print(f"${result.extracted.salary_min:,} - ${result.extracted.salary_max:,} {result.extracted.currency}")
+                        print(
+                            f"${result.extracted.salary_min:,} - ${result.extracted.salary_max:,} {result.extracted.currency}"
+                        )
                     else:
                         print(f"${result.extracted.salary_min:,}+ {result.extracted.currency}")
                 else:
@@ -230,7 +235,9 @@ async def main():
 
                 # Show scoring
                 print("\n--- SCORING ---")
-                print(f"   Tech Match: {result.scoring.tech_stack_score}/40 ({result.scoring.tech_stack_score/40*100:.0f}%)")
+                print(
+                    f"   Tech Match: {result.scoring.tech_stack_score}/40 ({result.scoring.tech_stack_score / 40 * 100:.0f}%)"
+                )
                 print(f"   Salary: {result.scoring.salary_score}/30")
                 print(f"   Seniority: {result.scoring.seniority_score}/20")
                 print(f"   Company: {result.scoring.company_score}/10")
@@ -246,7 +253,7 @@ async def main():
                     print(f"   Score penalty: -{hf.score_penalty} points")
                     print(f"   Should decline: {'YES' if hf.should_decline else 'No'}")
                     if hf.failed_filters:
-                        print(f"   Failed filters:")
+                        print("   Failed filters:")
                         for f in hf.failed_filters:
                             print(f"      * {f}")
 
@@ -268,7 +275,7 @@ async def main():
 
                 # Show manual review info if applicable
                 if result.requires_manual_review:
-                    print(f"   Requires manual review: YES")
+                    print("   Requires manual review: YES")
                     if result.manual_review_reason:
                         print(f"   Reason: {result.manual_review_reason[:100]}...")
 
@@ -297,6 +304,7 @@ async def main():
             except Exception as e:
                 print(f"\nError processing message: {e}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -317,12 +325,13 @@ async def main():
         print("   To send responses, use the full app workflow:")
         print("   1. Approve responses in the web UI")
         print("   2. Or use the send endpoint to send approved responses")
-        if stats['manual_review'] > 0:
+        if stats["manual_review"] > 0:
             print(f"\n   Note: {stats['manual_review']} message(s) require manual review")
 
     except Exception as e:
         print(f"\nError: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:
@@ -351,18 +360,12 @@ async def test_with_sample_messages():
             ¿Te interesaría saber más?
 
             Saludos,
-            María"""
+            María""",
         },
         # COURTESY_CLOSE - Simple thanks (should be ignored)
-        {
-            "sender": "Juan Pérez",
-            "message": "Gracias por tu respuesta, quedamos en contacto!"
-        },
+        {"sender": "Juan Pérez", "message": "Gracias por tu respuesta, quedamos en contacto!"},
         # COURTESY_CLOSE - Short acknowledgment (should be ignored)
-        {
-            "sender": "Ana López",
-            "message": "Ok, perfecto"
-        },
+        {"sender": "Ana López", "message": "Ok, perfecto"},
         # NEW_OPPORTUNITY - Low salary, should decline
         {
             "sender": "Carlos Ruiz",
@@ -372,7 +375,7 @@ async def test_with_sample_messages():
             Es presencial en Buenos Aires, 5 días a la semana.
             Salario: $50,000 USD.
 
-            ¿Te interesa?"""
+            ¿Te interesa?""",
         },
         # NEW_OPPORTUNITY - 4-day week mentioned, should process well
         {
@@ -383,28 +386,22 @@ async def test_with_sample_messages():
             Remote-first, $140,000-$180,000 USD, focused on AI/ML products.
             Tech: Python, LangChain, FastAPI, Kubernetes.
 
-            Would you like to chat this week?"""
+            Would you like to chat this week?""",
         },
         # FOLLOW_UP - Vague response (should require MANUAL_REVIEW)
-        {
-            "sender": "Pedro González",
-            "message": "Sure, Sebastián! mandame si queres un mensajito"
-        },
+        {"sender": "Pedro González", "message": "Sure, Sebastián! mandame si queres un mensajito"},
         # FOLLOW_UP - Clear salary question (should auto-respond)
         {
             "sender": "Sofia Torres",
-            "message": "Gracias por tu interés! ¿Cuál es tu expectativa salarial?"
+            "message": "Gracias por tu interés! ¿Cuál es tu expectativa salarial?",
         },
         # FOLLOW_UP - Availability question (should auto-respond)
         {
             "sender": "Diego Fernández",
-            "message": "Perfecto! ¿Cuándo podrías empezar si avanzamos con el proceso?"
+            "message": "Perfecto! ¿Cuándo podrías empezar si avanzamos con el proceso?",
         },
         # FOLLOW_UP - Vague message (should require MANUAL_REVIEW)
-        {
-            "sender": "Elena Ruiz",
-            "message": "Buenísimo! Te cuento más la semana que viene."
-        },
+        {"sender": "Elena Ruiz", "message": "Buenísimo! Te cuento más la semana que viene."},
     ]
 
     try:
@@ -451,7 +448,7 @@ async def test_with_sample_messages():
             # Show follow-up analysis if present
             if result.follow_up_analysis:
                 fa = result.follow_up_analysis
-                print(f"\nFollow-up Analysis:")
+                print("\nFollow-up Analysis:")
                 print(f"   Question type: {fa.question_type or 'NONE'}")
                 print(f"   Can auto-respond: {'Yes' if fa.can_auto_respond else 'No'}")
                 if fa.detected_question:
@@ -459,11 +456,11 @@ async def test_with_sample_messages():
 
             # Show manual review info
             if result.requires_manual_review:
-                print(f"\nManual Review Required: YES")
+                print("\nManual Review Required: YES")
                 if result.manual_review_reason:
                     print(f"   Reason: {result.manual_review_reason[:80]}...")
 
-            print(f"\nGenerated Response:")
+            print("\nGenerated Response:")
             print("-" * 40)
             if result.ai_response:
                 print(result.ai_response)
@@ -476,6 +473,7 @@ async def test_with_sample_messages():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

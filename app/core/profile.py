@@ -5,7 +5,7 @@ Loads user preferences and profile information from config/profile.yaml
 """
 
 from pathlib import Path
-from typing import Optional
+
 import yaml
 
 from app.core.config import settings
@@ -51,7 +51,7 @@ class UserProfile:
         - First name without accents
         - Lowercase variations
         """
-        variations = []
+        variations: list[str] = []
 
         if not self.name:
             return variations
@@ -67,9 +67,18 @@ class UserProfile:
             # Add version without accents (e.g., Sebastián -> Sebastian)
             # Simple accent removal for common Spanish characters
             accent_map = {
-                'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-                'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-                'ñ': 'n', 'Ñ': 'N'
+                "á": "a",
+                "é": "e",
+                "í": "i",
+                "ó": "o",
+                "ú": "u",
+                "Á": "A",
+                "É": "E",
+                "Í": "I",
+                "Ó": "O",
+                "Ú": "U",
+                "ñ": "n",
+                "Ñ": "N",
             }
             first_name_no_accent = first_name
             for accented, plain in accent_map.items():
@@ -93,7 +102,7 @@ class UserProfile:
         return unique_variations
 
 
-def load_user_profile(profile_path: Optional[str] = None) -> UserProfile:
+def load_user_profile(profile_path: str | None = None) -> UserProfile:
     """
     Load user profile from YAML file.
 
@@ -114,7 +123,7 @@ def load_user_profile(profile_path: Optional[str] = None) -> UserProfile:
         raise FileNotFoundError(f"Profile file not found: {path}")
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not data:
@@ -140,7 +149,7 @@ def load_user_profile(profile_path: Optional[str] = None) -> UserProfile:
 
 
 # Global profile instance (loaded on first access)
-_profile: Optional[UserProfile] = None
+_profile: UserProfile | None = None
 
 
 def get_user_profile() -> UserProfile:

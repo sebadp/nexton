@@ -2,7 +2,7 @@
 Database dependencies for FastAPI dependency injection.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

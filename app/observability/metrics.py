@@ -117,7 +117,7 @@ llm_provider_latency_seconds = Histogram(
 llm_tokens_used_total = Counter(
     "llm_tokens_used_total",
     "Total number of LLM tokens used",
-    ["provider", "model", "type"],  # type: prompt, completion
+    ["provider", "model", "type"],  # metric_type: prompt, completion
 )
 
 # Gauge for LLM cost
@@ -288,7 +288,7 @@ def track_pipeline_execution(status: str, duration_seconds: float) -> None:
 
 
 def track_llm_call(
-    model: str, status: str, latency_seconds: float, tokens_used: dict = None
+    model: str, status: str, latency_seconds: float, tokens_used: dict | None = None
 ) -> None:
     """
     Track LLM API call.
@@ -355,7 +355,7 @@ def get_metrics() -> bytes:
     Returns:
         Metrics in Prometheus text format
     """
-    return generate_latest()
+    return bytes(generate_latest())
 
 
 def track_llm_request(
@@ -383,10 +383,14 @@ def track_llm_request(
     llm_provider_latency_seconds.labels(provider=provider, model=model).observe(duration_seconds)
 
     if prompt_tokens > 0:
-        llm_tokens_used_total.labels(provider=provider, model=model, type="prompt").inc(prompt_tokens)
+        llm_tokens_used_total.labels(provider=provider, model=model, type="prompt").inc(
+            prompt_tokens
+        )
 
     if completion_tokens > 0:
-        llm_tokens_used_total.labels(provider=provider, model=model, type="completion").inc(completion_tokens)
+        llm_tokens_used_total.labels(provider=provider, model=model, type="completion").inc(
+            completion_tokens
+        )
 
     if cost_usd > 0:
         llm_cost_usd_total.labels(provider=provider, model=model).inc(cost_usd)

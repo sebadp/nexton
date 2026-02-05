@@ -29,6 +29,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -154,14 +155,11 @@ def print_result(idx: int, result: OpportunityResult):
         "NEW_OPPORTUNITY": "🆕",
         "FOLLOW_UP": "🔄",
         "COURTESY_CLOSE": "👋",
-    }.get(
-        result.conversation_state.state.value if result.conversation_state else "UNKNOWN",
-        "❓"
-    )
+    }.get(result.conversation_state.state.value if result.conversation_state else "UNKNOWN", "❓")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Message #{idx + 1} {status_emoji} {state_emoji}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"From: {result.recruiter_name}")
 
     if result.conversation_state:
@@ -169,7 +167,7 @@ def print_result(idx: int, result: OpportunityResult):
         print(f"  → {result.conversation_state.reasoning}")
 
     if result.status != "ignored":
-        print(f"\nExtracted Data:")
+        print("\nExtracted Data:")
         print(f"  Company: {result.extracted.company}")
         print(f"  Role: {result.extracted.role}")
         print(f"  Tech Stack: {', '.join(result.extracted.tech_stack) or 'N/A'}")
@@ -181,7 +179,7 @@ def print_result(idx: int, result: OpportunityResult):
                 salary += f" - ${result.extracted.salary_max:,}"
             print(f"  Salary: {salary}")
 
-        print(f"\nScoring:")
+        print("\nScoring:")
         print(f"  Total: {result.scoring.total_score}/100 ({result.scoring.tier})")
         print(f"  Tech Stack: {result.scoring.tech_stack_score}/40")
         print(f"  Salary: {result.scoring.salary_score}/30")
@@ -195,11 +193,11 @@ def print_result(idx: int, result: OpportunityResult):
                 print(f"  Work Week: {result.hard_filter_result.work_week_status}")
 
     if result.requires_manual_review:
-        print(f"\n⚠️  MANUAL REVIEW REQUIRED")
+        print("\n⚠️  MANUAL REVIEW REQUIRED")
         print(f"  Reason: {result.manual_review_reason}")
 
     if result.ai_response:
-        print(f"\n💬 AI Response:")
+        print("\n💬 AI Response:")
         print("-" * 40)
         # Indent the response
         for line in result.ai_response.split("\n"):
@@ -224,7 +222,7 @@ async def scrape_linkedin_messages(limit: int) -> list[LinkedInMessage]:
     async with LinkedInScraper(config) as scraper:
         messages = await scraper.scrape_messages(limit=limit, unread_only=True)
 
-    return messages
+    return cast(list[LinkedInMessage], messages)
 
 
 async def process_messages(
@@ -274,7 +272,7 @@ async def send_email_summary(results: list[OpportunityResult]) -> bool:
     if success:
         logger.info("Email sent successfully!")
         print(f"\n📧 Email sent to: {settings.NOTIFICATION_EMAIL}")
-        print(f"   View at: http://localhost:8025 (if using Mailpit)")
+        print("   View at: http://localhost:8025 (if using Mailpit)")
     else:
         logger.warning("Failed to send email or notifications disabled")
 
@@ -320,7 +318,7 @@ async def main():
     # Get messages
     if args.sample:
         print(f"📝 Using {len(SAMPLE_MESSAGES)} sample messages...")
-        messages = SAMPLE_MESSAGES[:args.limit]
+        messages = SAMPLE_MESSAGES[: args.limit]
     else:
         print(f"🔍 Scraping LinkedIn messages (limit: {args.limit})...")
         if not settings.LINKEDIN_EMAIL or not settings.LINKEDIN_PASSWORD:
@@ -343,9 +341,9 @@ async def main():
         return
 
     # Print results
-    print(f"\n{'='*60}")
-    print(f"RESULTS SUMMARY")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("RESULTS SUMMARY")
+    print(f"{'=' * 60}")
 
     for idx, result in enumerate(results):
         print_result(idx, result)
@@ -359,9 +357,9 @@ async def main():
         "ignored": sum(1 for r in results if r.status == "ignored"),
     }
 
-    print(f"\n{'='*60}")
-    print(f"FINAL STATS")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("FINAL STATS")
+    print(f"{'=' * 60}")
     print(f"Total processed: {len(results)}")
     print(f"  ✅ Processed: {stats['processed']}")
     print(f"  ❌ Declined: {stats['declined']}")
@@ -371,12 +369,12 @@ async def main():
 
     # Send email
     if not args.no_email:
-        print(f"\n📧 Sending email summary...")
+        print("\n📧 Sending email summary...")
         await send_email_summary(results)
     else:
-        print(f"\n📧 Skipping email (--no-email flag)")
+        print("\n📧 Skipping email (--no-email flag)")
 
-    print(f"\n✅ Done!")
+    print("\n✅ Done!")
 
 
 if __name__ == "__main__":

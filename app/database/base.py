@@ -1,7 +1,8 @@
 """
 Database connection and session management.
 """
-from typing import AsyncGenerator
+
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -9,6 +10,9 @@ from sqlalchemy.orm import declarative_base
 from app.core.config import settings
 
 # Create async engine
+if not settings.DATABASE_URL:
+    raise ValueError("DATABASE_URL must be set")
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,

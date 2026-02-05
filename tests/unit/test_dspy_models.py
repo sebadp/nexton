@@ -1,6 +1,7 @@
 """
 Unit tests for DSPy models (Pydantic).
 """
+
 import pytest
 
 from app.dspy_modules.models import (

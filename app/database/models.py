@@ -1,20 +1,20 @@
 """
 Database models using SQLAlchemy ORM.
 """
+
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     ARRAY,
+    JSON,
+    TIMESTAMP,
     Boolean,
     CheckConstraint,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
-    TIMESTAMP,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,41 +36,41 @@ class Opportunity(Base):
 
     # Recruiter Information
     recruiter_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    company: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Job Information
-    role: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    seniority: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    tech_stack: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seniority: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
 
     # Compensation
-    salary_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    salary_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, default="USD")
+    salary_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    salary_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True, default="USD")
 
     # Work Arrangement
-    remote_policy: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    remote_policy: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Scoring & Classification
-    total_score: Mapped[Optional[int]] = mapped_column(
+    total_score: Mapped[int | None] = mapped_column(
         Integer,
         CheckConstraint("total_score >= 0 AND total_score <= 100", name="check_score_range"),
         nullable=True,
     )
-    tech_stack_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    salary_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    seniority_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    company_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tech_stack_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    salary_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seniority_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    company_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    tier: Mapped[Optional[str]] = mapped_column(
+    tier: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="HIGH_PRIORITY, INTERESANTE, POCO_INTERESANTE, NO_INTERESA",
     )
 
     # AI Response
-    ai_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_response: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status Tracking
     status: Mapped[str] = mapped_column(
@@ -81,12 +81,12 @@ class Opportunity(Base):
     )
 
     # Conversation Classification (NEW)
-    conversation_state: Mapped[Optional[str]] = mapped_column(
+    conversation_state: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
     )
-    processing_status: Mapped[Optional[str]] = mapped_column(
+    processing_status: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="processed, ignored, declined, manual_review, auto_responded",
@@ -98,28 +98,28 @@ class Opportunity(Base):
         nullable=False,
         default=False,
     )
-    manual_review_reason: Mapped[Optional[str]] = mapped_column(
+    manual_review_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Reason why manual review is required",
     )
 
     # Hard Filter Results (NEW - JSON)
-    hard_filter_results: Mapped[Optional[dict]] = mapped_column(
+    hard_filter_results: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
         comment="Results from hard filter checks (work_week, salary, tech_match, etc.)",
     )
 
     # Follow-up Analysis (NEW - JSON)
-    follow_up_analysis: Mapped[Optional[dict]] = mapped_column(
+    follow_up_analysis: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
         comment="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
     )
 
     # Raw Data
-    raw_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -134,14 +134,14 @@ class Opportunity(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
+    processed_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
     )
 
     # Additional metadata
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    processing_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Indexes for performance
     __table_args__ = (
@@ -224,9 +224,13 @@ class PendingResponse(Base):
     )
 
     # Response Content
-    original_response: Mapped[str] = mapped_column(Text, nullable=False, comment="AI-generated response")
-    edited_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="User-edited response")
-    final_response: Mapped[Optional[str]] = mapped_column(
+    original_response: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="AI-generated response"
+    )
+    edited_response: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="User-edited response"
+    )
+    final_response: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Final response that was/will be sent",
@@ -242,12 +246,12 @@ class PendingResponse(Base):
     )
 
     # User Actions
-    approved_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    declined_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    sent_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    declined_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     # Error Tracking
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     send_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Timestamps

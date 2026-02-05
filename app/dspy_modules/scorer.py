@@ -4,6 +4,7 @@ Scorer - DSPy module to score opportunities based on candidate profile.
 Evaluates how well an opportunity matches candidate's preferences
 and requirements.
 """
+
 import json
 
 import dspy
@@ -60,25 +61,31 @@ class Scorer(dspy.Module):
 
         try:
             # Prepare inputs as JSON
-            extracted_json = json.dumps({
-                "company": extracted.company,
-                "role": extracted.role,
-                "seniority": extracted.seniority,
-                "tech_stack": extracted.tech_stack,
-                "salary_min": extracted.salary_min,
-                "salary_max": extracted.salary_max,
-                "remote_policy": extracted.remote_policy,
-                "location": extracted.location,
-            }, indent=2)
+            extracted_json = json.dumps(
+                {
+                    "company": extracted.company,
+                    "role": extracted.role,
+                    "seniority": extracted.seniority,
+                    "tech_stack": extracted.tech_stack,
+                    "salary_min": extracted.salary_min,
+                    "salary_max": extracted.salary_max,
+                    "remote_policy": extracted.remote_policy,
+                    "location": extracted.location,
+                },
+                indent=2,
+            )
 
-            profile_json = json.dumps({
-                "name": profile.name,
-                "preferred_technologies": profile.preferred_technologies,
-                "years_of_experience": profile.years_of_experience,
-                "current_seniority": profile.current_seniority,
-                "minimum_salary_usd": profile.minimum_salary_usd,
-                "preferred_remote_policy": profile.preferred_remote_policy,
-            }, indent=2)
+            profile_json = json.dumps(
+                {
+                    "name": profile.name,
+                    "preferred_technologies": profile.preferred_technologies,
+                    "years_of_experience": profile.years_of_experience,
+                    "current_seniority": profile.current_seniority,
+                    "minimum_salary_usd": profile.minimum_salary_usd,
+                    "preferred_remote_policy": profile.preferred_remote_policy,
+                },
+                indent=2,
+            )
 
             # Call LLM
             prediction = self.score(
@@ -195,8 +202,8 @@ class Scorer(dspy.Module):
             return 20  # Neutral score
 
         # Calculate overlap
-        job_set = set(t.lower() for t in job_tech)
-        pref_set = set(t.lower() for t in preferred_tech)
+        job_set = {t.lower() for t in job_tech}
+        pref_set = {t.lower() for t in preferred_tech}
         matches = len(job_set & pref_set)
         total = len(pref_set)
 
@@ -278,9 +285,20 @@ class Scorer(dspy.Module):
         """Score company attractiveness (0-10)."""
         # Simple heuristic - can be enhanced with company database
         well_known = [
-            "google", "microsoft", "amazon", "apple", "meta",
-            "netflix", "uber", "airbnb", "stripe", "spotify",
-            "mercadolibre", "mercadolibre", "globant", "auth0",
+            "google",
+            "microsoft",
+            "amazon",
+            "apple",
+            "meta",
+            "netflix",
+            "uber",
+            "airbnb",
+            "stripe",
+            "spotify",
+            "mercadolibre",
+            "mercadolibre",
+            "globant",
+            "auth0",
         ]
 
         company_lower = company.lower()

@@ -3,7 +3,6 @@ Data models for notifications and response workflow.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -15,8 +14,8 @@ class NotificationRule:
     """
 
     enabled: bool = True
-    tier_threshold: list[str] = None  # ["A", "B"]
-    score_threshold: Optional[int] = None  # Minimum score (e.g., 80)
+    tier_threshold: list[str] | None = None  # ["A", "B"]
+    score_threshold: int | None = None  # Minimum score (e.g., 80)
     notify_email: str = ""  # Email address to notify
     include_response: bool = True  # Include AI-generated response in email
 
@@ -39,7 +38,7 @@ class NotificationRule:
             return False
 
         # Check tier
-        if opportunity.tier not in self.tier_threshold:
+        if self.tier_threshold is not None and opportunity.tier not in self.tier_threshold:
             return False
 
         # Check score threshold
@@ -63,11 +62,11 @@ class OpportunityEmail:
     total_score: int
     salary_range: str
     tech_stack: list[str]
-    suggested_response: Optional[str] = None
+    suggested_response: str | None = None
     # Action URLs
-    approve_url: Optional[str] = None
-    edit_url: Optional[str] = None
-    decline_url: Optional[str] = None
+    approve_url: str | None = None
+    edit_url: str | None = None
+    decline_url: str | None = None
 
 
 @dataclass

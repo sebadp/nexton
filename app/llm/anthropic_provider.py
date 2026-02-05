@@ -4,8 +4,6 @@ Anthropic Claude LLM provider implementation.
 Supports Claude 3 models (Opus, Sonnet, Haiku).
 """
 
-from typing import Optional
-
 from anthropic import AsyncAnthropic
 
 from app.core.logging import get_logger
@@ -40,7 +38,7 @@ class AnthropicProvider(LLMProvider):
         """
         super().__init__(model, **kwargs)
         self.client = AsyncAnthropic(api_key=api_key, **kwargs)
-        logger.info(f"anthropic_provider_initialized", extra={"model": model})
+        logger.info("anthropic_provider_initialized", extra={"model": model})
 
     @property
     def provider_name(self) -> str:
@@ -50,28 +48,22 @@ class AnthropicProvider(LLMProvider):
     def cost_per_1k_prompt_tokens(self) -> float:
         """Get prompt token cost for current model."""
         # Default to sonnet pricing if model not found
-        pricing = self.MODEL_PRICING.get(
-            self.model,
-            self.MODEL_PRICING["claude-3-sonnet"]
-        )
+        pricing = self.MODEL_PRICING.get(self.model, self.MODEL_PRICING["claude-3-sonnet"])
         return pricing["prompt"]
 
     @property
     def cost_per_1k_completion_tokens(self) -> float:
         """Get completion token cost for current model."""
-        pricing = self.MODEL_PRICING.get(
-            self.model,
-            self.MODEL_PRICING["claude-3-sonnet"]
-        )
+        pricing = self.MODEL_PRICING.get(self.model, self.MODEL_PRICING["claude-3-sonnet"])
         return pricing["completion"]
 
     async def complete(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion using Anthropic Claude.
@@ -93,16 +85,16 @@ class AnthropicProvider(LLMProvider):
             system_prompt=system_prompt,
             temperature=temperature,
             max_tokens=max_tokens or 4096,  # Anthropic requires max_tokens
-            **kwargs
+            **kwargs,
         )
 
     async def chat(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        system_prompt: Optional[str] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        system_prompt: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion for chat messages.
@@ -124,7 +116,7 @@ class AnthropicProvider(LLMProvider):
                     "model": self.model,
                     "message_count": len(messages),
                     "temperature": temperature,
-                }
+                },
             )
 
             # Anthropic requires max_tokens
@@ -137,7 +129,7 @@ class AnthropicProvider(LLMProvider):
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                **kwargs
+                **kwargs,
             }
 
             # Add system prompt if provided
@@ -154,9 +146,7 @@ class AnthropicProvider(LLMProvider):
                     completion_tokens=response.usage.output_tokens,
                     total_tokens=response.usage.input_tokens + response.usage.output_tokens,
                 )
-                usage.cost_usd = self.calculate_cost(
-                    usage.prompt_tokens, usage.completion_tokens
-                )
+                usage.cost_usd = self.calculate_cost(usage.prompt_tokens, usage.completion_tokens)
 
             # Extract content (Claude returns list of content blocks)
             content = ""
@@ -169,7 +159,7 @@ class AnthropicProvider(LLMProvider):
                     "model": self.model,
                     "usage": usage.__dict__ if usage else None,
                     "cost_usd": usage.cost_usd if usage else 0,
-                }
+                },
             )
 
             return LLMResponse(
@@ -187,10 +177,7 @@ class AnthropicProvider(LLMProvider):
             )
 
         except Exception as e:
-            logger.error(
-                "anthropic_request_failed",
-                extra={"model": self.model, "error": str(e)}
-            )
+            logger.error("anthropic_request_failed", extra={"model": self.model, "error": str(e)})
             raise
 
     async def embed(self, text: str) -> list[float]:

@@ -3,6 +3,7 @@ Health check endpoints.
 
 Provides endpoints to check application and dependency health.
 """
+
 import httpx
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -88,6 +89,8 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     try:
         import redis.asyncio as aioredis
 
+        if not settings.REDIS_URL:
+            raise ValueError("REDIS_URL must be set")
         redis_client = aioredis.from_url(
             settings.REDIS_URL,
             encoding="utf-8",
