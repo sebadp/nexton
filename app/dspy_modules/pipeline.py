@@ -3,6 +3,7 @@ OpportunityPipeline - Integrates all DSPy modules into a complete workflow.
 
 This is the main entry point for processing LinkedIn recruiter messages.
 """
+import os
 import time
 from typing import Optional
 
@@ -66,7 +67,28 @@ class OpportunityPipeline(dspy.Module):
         self.generator = ResponseGenerator()
         self.follow_up_analyzer = FollowUpAnalyzer()
 
+        self._try_load_optimized_modules()
+
         logger.info("opportunity_pipeline_initialized")
+
+    def _try_load_optimized_modules(self):
+        """Attempt to load optimized versions of modules."""
+        optimized_dir = os.path.join(os.path.dirname(__file__), "optimized_modules")
+        
+        modules_to_load = [
+            ("conversation_state_analyzer.json", self.conversation_state_analyzer, "ConversationStateAnalyzer"),
+            ("message_analyzer.json", self.analyzer, "MessageAnalyzer"),
+            ("follow_up_analyzer.json", self.follow_up_analyzer, "FollowUpAnalyzer"),
+        ]
+
+        for filename, module, name in modules_to_load:
+            path = os.path.join(optimized_dir, filename)
+            if os.path.exists(path):
+                try:
+                    module.load(path)
+                    logger.info(f"loaded_optimized_module", module=name, path=path)
+                except Exception as e:
+                    logger.warning(f"failed_load_optimized_module", module=name, error=str(e))
 
     def forward(
         self,
