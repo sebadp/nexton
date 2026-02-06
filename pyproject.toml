@@ -75,6 +75,8 @@ pyyaml = "^6.0.1"
 python-dateutil = "^2.8.2"
 pytz = "^2024.1"
 tenacity = "^8.2.3"
+cloudpickle = "^3.1.2"
+google-generativeai = "^0.8.6"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
