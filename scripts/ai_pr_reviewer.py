@@ -67,11 +67,21 @@ def get_pr_diff(pr: PullRequest) -> str:
 
 def configure_llm():
     """Configure DSPy with the environment's LLM provider."""
+    # Prioritize Gemini if key is present, or check LLM_PROVIDER
+    gemini_key = os.getenv("GEMINI_API_KEY")
     provider = os.getenv("LLM_PROVIDER", settings.LLM_PROVIDER)
     model = os.getenv("LLM_MODEL", settings.LLM_MODEL)
+
+    if gemini_key:
+        print(f"Configuring AI Reviewer with Gemini ({model or 'gemini-1.5-pro'})")
+        # Configure Gemini
+        lm = dspy.Google(model=model or "models/gemini-1.5-pro", api_key=gemini_key)
+        dspy.settings.configure(lm=lm)
+        return
+
+    # Fallback to other providers
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
 
-    # Fallback if config.py settings are empty/default in CI env
     if not api_key:
         print("Warning: No API Key found for AI Reviewer")
 
@@ -84,7 +94,6 @@ def configure_llm():
             model=f"anthropic/{model}", api_key=os.getenv("ANTHROPIC_API_KEY"), max_tokens=2000
         )
     else:
-        # Default or fallback
         lm = dspy.LM(model="openai/gpt-4-turbo-preview", max_tokens=2000)
 
     dspy.settings.configure(lm=lm)
