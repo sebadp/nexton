@@ -7,7 +7,6 @@ Sends HTML emails with opportunity details and AI-generated responses.
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 import structlog
 
@@ -23,12 +22,12 @@ class EmailClient:
 
     def __init__(
         self,
-        smtp_host: Optional[str] = None,
-        smtp_port: Optional[int] = None,
-        smtp_username: Optional[str] = None,
-        smtp_password: Optional[str] = None,
-        from_email: Optional[str] = None,
-        use_tls: Optional[bool] = None,
+        smtp_host: str | None = None,
+        smtp_port: int | None = None,
+        smtp_username: str | None = None,
+        smtp_password: str | None = None,
+        from_email: str | None = None,
+        use_tls: bool | None = None,
     ):
         """
         Initialize email client.
@@ -66,7 +65,7 @@ class EmailClient:
         to: str,
         subject: str,
         html_body: str,
-        text_body: Optional[str] = None,
+        text_body: str | None = None,
     ) -> bool:
         """
         Send email.
@@ -232,11 +231,13 @@ class EmailClient:
         ]
 
         if email_data.suggested_response:
-            lines.extend([
-                "Suggested Response:",
-                email_data.suggested_response,
-                "",
-            ])
+            lines.extend(
+                [
+                    "Suggested Response:",
+                    email_data.suggested_response,
+                    "",
+                ]
+            )
 
         # Add action URLs
         if email_data.approve_url:
@@ -275,34 +276,40 @@ class EmailClient:
             else:
                 salary = "Not specified"
 
-            lines.extend([
-                f"Opportunity #{i} - {opp.tier} (Score: {opp.total_score}/100)",
-                "-" * 60,
-                f"From: {opp.recruiter_name}",
-                f"Company: {opp.company or 'Unknown'}",
-                f"Position: {opp.role or 'Unknown'}",
-                f"Salary: {salary}",
-                f"Tech Stack: {', '.join(opp.tech_stack or [])}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"Opportunity #{i} - {opp.tier} (Score: {opp.total_score}/100)",
+                    "-" * 60,
+                    f"From: {opp.recruiter_name}",
+                    f"Company: {opp.company or 'Unknown'}",
+                    f"Position: {opp.role or 'Unknown'}",
+                    f"Salary: {salary}",
+                    f"Tech Stack: {', '.join(opp.tech_stack or [])}",
+                    "",
+                ]
+            )
 
             if opp.ai_response:
                 response_preview = opp.ai_response
                 if len(response_preview) > 300:
                     response_preview = response_preview[:297] + "..."
-                lines.extend([
-                    "Suggested Response:",
-                    response_preview,
-                    "",
-                ])
+                lines.extend(
+                    [
+                        "Suggested Response:",
+                        response_preview,
+                        "",
+                    ]
+                )
 
             lines.append("")
 
-        lines.extend([
-            "=" * 60,
-            "",
-            "LinkedIn AI Agent - Daily Summary",
-        ])
+        lines.extend(
+            [
+                "=" * 60,
+                "",
+                "LinkedIn AI Agent - Daily Summary",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -339,51 +346,63 @@ class EmailClient:
             score = result.scoring.total_score if result.scoring else 0
 
             # Get conversation state
-            state = result.conversation_state.state.value if result.conversation_state else "UNKNOWN"
+            state = (
+                result.conversation_state.state.value if result.conversation_state else "UNKNOWN"
+            )
 
-            lines.extend([
-                f"Message #{i} {status_icon} - {tier} (Score: {score}/100)",
-                "-" * 60,
-                f"From: {result.recruiter_name}",
-                f"State: {state}",
-                f"Company: {result.extracted.company or 'Unknown'}",
-                f"Role: {result.extracted.role or 'Unknown'}",
-                f"Tech Stack: {', '.join(result.extracted.tech_stack or [])}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"Message #{i} {status_icon} - {tier} (Score: {score}/100)",
+                    "-" * 60,
+                    f"From: {result.recruiter_name}",
+                    f"State: {state}",
+                    f"Company: {result.extracted.company or 'Unknown'}",
+                    f"Role: {result.extracted.role or 'Unknown'}",
+                    f"Tech Stack: {', '.join(result.extracted.tech_stack or [])}",
+                    "",
+                ]
+            )
 
             # Add hard filter info if declined
             if result.hard_filter_result and result.hard_filter_result.failed_filters:
-                lines.extend([
-                    f"Failed Filters: {', '.join(result.hard_filter_result.failed_filters)}",
-                    "",
-                ])
+                lines.extend(
+                    [
+                        f"Failed Filters: {', '.join(result.hard_filter_result.failed_filters)}",
+                        "",
+                    ]
+                )
 
             # Add AI response
             if result.ai_response:
                 response_preview = result.ai_response
                 if len(response_preview) > 300:
                     response_preview = response_preview[:297] + "..."
-                lines.extend([
-                    "AI Response:",
-                    response_preview,
-                    "",
-                ])
+                lines.extend(
+                    [
+                        "AI Response:",
+                        response_preview,
+                        "",
+                    ]
+                )
 
             # Add manual review reason if applicable
             if result.requires_manual_review and result.manual_review_reason:
-                lines.extend([
-                    f"Manual Review Required: {result.manual_review_reason}",
-                    "",
-                ])
+                lines.extend(
+                    [
+                        f"Manual Review Required: {result.manual_review_reason}",
+                        "",
+                    ]
+                )
 
             lines.append("")
 
-        lines.extend([
-            "=" * 60,
-            "",
-            "LinkedIn AI Agent Lite - Summary",
-        ])
+        lines.extend(
+            [
+                "=" * 60,
+                "",
+                "LinkedIn AI Agent Lite - Summary",
+            ]
+        )
 
         return "\n".join(lines)
 

@@ -4,8 +4,9 @@ Tests for LLM providers.
 Tests the multi-model LLM support including OpenAI, Anthropic, and Ollama providers.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from app.llm import (
     DSPyLLMAdapter,
@@ -84,7 +85,9 @@ class TestOpenAIProvider:
         mock_response.usage = Mock(prompt_tokens=100, completion_tokens=50, total_tokens=150)
         mock_response.model_dump = lambda: {}
 
-        with patch.object(provider.client.chat.completions, "create", new=AsyncMock(return_value=mock_response)):
+        with patch.object(
+            provider.client.chat.completions, "create", new=AsyncMock(return_value=mock_response)
+        ):
             response = await provider.complete("Test prompt")
 
             assert response.content == "Test response"
@@ -130,7 +133,9 @@ class TestAnthropicProvider:
         mock_response.type = "message"
         mock_response.role = "assistant"
 
-        with patch.object(provider.client.messages, "create", new=AsyncMock(return_value=mock_response)):
+        with patch.object(
+            provider.client.messages, "create", new=AsyncMock(return_value=mock_response)
+        ):
             response = await provider.complete("Test prompt")
 
             assert response.content == "Test response"
@@ -144,6 +149,7 @@ class TestAnthropicProvider:
 
         with pytest.raises(NotImplementedError):
             import asyncio
+
             asyncio.run(provider.embed("test text"))
 
 
@@ -201,7 +207,9 @@ class TestLLMFactory:
     def test_create_anthropic_provider(self):
         """Test creating Anthropic provider."""
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-            provider = LLMFactory.create_provider("anthropic", "claude-3-sonnet-20240229", api_key="test-key")
+            provider = LLMFactory.create_provider(
+                "anthropic", "claude-3-sonnet-20240229", api_key="test-key"
+            )
             assert isinstance(provider, AnthropicProvider)
             assert provider.model == "claude-3-sonnet-20240229"
 

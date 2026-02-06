@@ -14,6 +14,7 @@ import os
 
 # Load environment variables FIRST, before importing app modules
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from app.scraper.linkedin_scraper import LinkedInScraper, ScraperConfig
@@ -74,6 +75,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

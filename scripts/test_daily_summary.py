@@ -2,6 +2,7 @@
 """
 Test script para enviar email de resumen diario con datos de prueba.
 """
+
 import asyncio
 import sys
 from datetime import datetime
@@ -133,9 +134,9 @@ Sebastian""",
 
     if result:
         print("✅ Daily summary sent successfully!")
-        print(f"📧 Email sent to: sebastian.davila.personal@gmail.com")
+        print("📧 Email sent to: sebastian.davila.personal@gmail.com")
         print(f"📊 Opportunities included: {len(opportunities)}")
-        print(f"\n🌐 View the email at: http://localhost:8025")
+        print("\n🌐 View the email at: http://localhost:8025")
     else:
         print("❌ Failed to send daily summary")
 

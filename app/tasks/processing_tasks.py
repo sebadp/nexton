@@ -7,9 +7,6 @@ and storing results in the database.
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import PipelineError
 from app.core.logging import get_logger
@@ -29,8 +26,8 @@ logger = get_logger(__name__)
     default_retry_delay=60,
 )
 def process_message(
-    self, recruiter_name: str, raw_message: str, conversation_url: Optional[str] = None
-) -> Dict:
+    self, recruiter_name: str, raw_message: str, conversation_url: str | None = None
+) -> dict:
     """
     Process a LinkedIn message through the DSPy pipeline.
 
@@ -126,17 +123,15 @@ def process_message(
         )
 
         # Retry with exponential backoff
-        raise self.retry(exc=e, countdown=60 * (2**self.request.retries))
+        raise self.retry(exc=e, countdown=60 * (2**self.request.retries)) from e
 
     except Exception as e:
-        logger.error(
-            "processing_failed", task_id=self.request.id, error=str(e)
-        )
+        logger.error("processing_failed", task_id=self.request.id, error=str(e))
         raise
 
 
 @celery_app.task(name="app.tasks.processing_tasks.process_opportunity")
-def process_opportunity(opportunity_id: int) -> Dict:
+def process_opportunity(opportunity_id: int) -> dict:
     """
     Re-process an existing opportunity through the pipeline.
 
@@ -151,9 +146,7 @@ def process_opportunity(opportunity_id: int) -> Dict:
     Returns:
         Dictionary with processing results
     """
-    logger.info(
-        "reprocessing_opportunity_started", opportunity_id=opportunity_id
-    )
+    logger.info("reprocessing_opportunity_started", opportunity_id=opportunity_id)
 
     async def reprocess():
         async with async_session() as session:
@@ -169,8 +162,8 @@ def process_opportunity(opportunity_id: int) -> Dict:
             profile = get_profile()
 
             result = pipeline.forward(
-                message=opportunity.raw_message,
-                recruiter_name=opportunity.recruiter_name,
+                message=opportunity.raw_message or "",
+                recruiter_name=opportunity.recruiter_name or "Unknown",
                 profile=profile,
             )
 
@@ -223,7 +216,7 @@ def process_opportunity(opportunity_id: int) -> Dict:
 
 
 @celery_app.task(name="app.tasks.processing_tasks.cleanup_old_opportunities")
-def cleanup_old_opportunities(days: int = 90) -> Dict:
+def cleanup_old_opportunities(days: int = 90) -> dict:
     """
     Clean up old opportunities (periodic task).
 
@@ -281,7 +274,7 @@ def cleanup_old_opportunities(days: int = 90) -> Dict:
 
 
 @celery_app.task(name="app.tasks.processing_tasks.batch_process_messages")
-def batch_process_messages(messages: list[Dict]) -> Dict:
+def batch_process_messages(messages: list[dict]) -> dict:
     """
     Process multiple messages in a batch.
 
@@ -330,7 +323,7 @@ def batch_process_messages(messages: list[Dict]) -> Dict:
 
 
 @celery_app.task(name="app.tasks.processing_tasks.generate_daily_report")
-def generate_daily_report() -> Dict:
+def generate_daily_report() -> dict:
     """
     Generate a daily report of opportunities (periodic task).
 
@@ -348,14 +341,12 @@ def generate_daily_report() -> Dict:
             tomorrow = today + timedelta(days=1)
 
             # Get opportunities created today
-            opportunities = await repo.get_by_date_range(
-                start_date=today, end_date=tomorrow
-            )
+            opportunities = await repo.get_by_date_range(start_date=today, end_date=tomorrow)
 
             # Calculate statistics
             total_count = len(opportunities)
-            by_tier = {}
-            by_company = {}
+            by_tier: dict[str, int] = {}
+            by_company: dict[str, int] = {}
 
             for opp in opportunities:
                 # Count by tier

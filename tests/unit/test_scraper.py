@@ -2,9 +2,10 @@
 Unit tests for LinkedIn scraper functionality.
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.scraper.linkedin_scraper import LinkedInScraper
 from app.scraper.rate_limiter import RateLimiter
@@ -63,6 +64,7 @@ class TestRateLimiter:
 
         # Wait for window to expire
         import asyncio
+
         await asyncio.sleep(1.1)
 
         # Should have cleaned up old requests
@@ -279,9 +281,7 @@ class TestLinkedInScraper:
         # Mock message elements
         mock_message = MagicMock()
         mock_message.query_selector = AsyncMock()
-        mock_message.query_selector.return_value.inner_text = AsyncMock(
-            return_value="Test message"
-        )
+        mock_message.query_selector.return_value.inner_text = AsyncMock(return_value="Test message")
         mock_page.query_selector_all = AsyncMock(return_value=[mock_message])
 
         messages = await scraper.fetch_messages()

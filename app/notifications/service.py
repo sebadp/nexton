@@ -8,13 +8,18 @@ Supports both full mode (with DB models) and lite mode (with pipeline results).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import structlog
 
 from app.core.config import settings
 from app.notifications.email_client import EmailClient
-from app.notifications.models import DailySummaryEmail, LiteSummaryEmail, NotificationRule, OpportunityEmail
+from app.notifications.models import (
+    DailySummaryEmail,
+    LiteSummaryEmail,
+    NotificationRule,
+    OpportunityEmail,
+)
 
 # Conditional import for full mode (with database)
 if TYPE_CHECKING:
@@ -29,8 +34,8 @@ class NotificationService:
 
     def __init__(
         self,
-        email_client: Optional[EmailClient] = None,
-        notification_rule: Optional[NotificationRule] = None,
+        email_client: EmailClient | None = None,
+        notification_rule: NotificationRule | None = None,
     ):
         """
         Initialize notification service.
@@ -184,7 +189,7 @@ class NotificationService:
 
     async def send_lite_summary(
         self,
-        results: list["OpportunityResult"],
+        results: list[OpportunityResult],
     ) -> bool:
         """
         Send summary email for lite mode (no database).
@@ -272,7 +277,9 @@ class NotificationService:
             salary_range = "Not specified"
 
         # Build subject
-        subject = f"New {opportunity.tier}-Tier Opportunity: {opportunity.company} - {opportunity.role}"
+        subject = (
+            f"New {opportunity.tier}-Tier Opportunity: {opportunity.company} - {opportunity.role}"
+        )
 
         # Include AI response if enabled
         suggested_response = None
@@ -291,8 +298,8 @@ class NotificationService:
             recruiter_name=opportunity.recruiter_name,
             company=opportunity.company or "Unknown",
             position=opportunity.role or "Unknown",
-            tier=opportunity.tier,
-            total_score=opportunity.total_score,
+            tier=opportunity.tier or "C",
+            total_score=opportunity.total_score if opportunity.total_score is not None else 0,
             salary_range=salary_range,
             tech_stack=opportunity.tech_stack or [],
             suggested_response=suggested_response,

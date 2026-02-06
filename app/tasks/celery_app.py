@@ -77,9 +77,7 @@ celery_app.conf.task_queues = (
     # Processing queue for DSPy pipeline
     Queue("processing", Exchange("processing"), routing_key="processing"),
     # Low priority queue for cleanup tasks
-    Queue(
-        "low_priority", Exchange("low_priority"), routing_key="low_priority", priority=1
-    ),
+    Queue("low_priority", Exchange("low_priority"), routing_key="low_priority", priority=1),
 )
 
 # Route tasks to specific queues

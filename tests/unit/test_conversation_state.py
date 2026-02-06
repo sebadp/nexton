@@ -7,8 +7,17 @@ Tests the following scenarios:
 - FOLLOW_UP detection for response messages
 - Hard filter validation for work week requirements
 """
+
 import pytest
 
+from app.dspy_modules.hard_filters import (
+    apply_hard_filters,
+    check_salary_requirement,
+    check_tech_stack_match,
+    check_work_week_requirement,
+    get_candidate_status_from_profile,
+)
+from app.dspy_modules.message_analyzer import ConversationStateAnalyzer
 from app.dspy_modules.models import (
     CandidateStatus,
     ConversationState,
@@ -17,44 +26,39 @@ from app.dspy_modules.models import (
     HardFilterResult,
     ScoringResult,
 )
-from app.dspy_modules.message_analyzer import ConversationStateAnalyzer, COURTESY_PHRASES
-from app.dspy_modules.hard_filters import (
-    apply_hard_filters,
-    check_work_week_requirement,
-    check_salary_requirement,
-    check_tech_stack_match,
-    get_candidate_status_from_profile,
-)
 
 
 class TestCourtesyPhraseDetection:
     """Tests for quick courtesy phrase detection."""
 
-    @pytest.mark.parametrize("message", [
-        "Gracias",
-        "gracias",
-        "GRACIAS",
-        "Muchas gracias",
-        "Ok",
-        "OK",
-        "Dale",
-        "Perfecto",
-        "Excelente",
-        "Genial",
-        "Quedamos así",
-        "Suerte",
-        "Éxitos",
-        "Thanks",
-        "Thank you",
-        "Perfect",
-        "Great",
-        "Good luck",
-        "Sounds good",
-        "Got it",
-        "Understood",
-        "Listo",
-        "Entendido",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Gracias",
+            "gracias",
+            "GRACIAS",
+            "Muchas gracias",
+            "Ok",
+            "OK",
+            "Dale",
+            "Perfecto",
+            "Excelente",
+            "Genial",
+            "Quedamos así",
+            "Suerte",
+            "Éxitos",
+            "Thanks",
+            "Thank you",
+            "Perfect",
+            "Great",
+            "Good luck",
+            "Sounds good",
+            "Got it",
+            "Understood",
+            "Listo",
+            "Entendido",
+        ],
+    )
     def test_courtesy_phrases_detected(self, message: str):
         """Test that common courtesy phrases are detected."""
         analyzer = ConversationStateAnalyzer()
@@ -65,14 +69,17 @@ class TestCourtesyPhraseDetection:
         assert result.should_process is False
         assert result.confidence == "HIGH"
 
-    @pytest.mark.parametrize("message", [
-        "Gracias!",
-        "gracias.",
-        "Ok!",
-        "Perfecto!",
-        "Thanks!",
-        "Great!",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Gracias!",
+            "gracias.",
+            "Ok!",
+            "Perfecto!",
+            "Thanks!",
+            "Great!",
+        ],
+    )
     def test_courtesy_phrases_with_punctuation(self, message: str):
         """Test that courtesy phrases with punctuation are detected."""
         analyzer = ConversationStateAnalyzer()
@@ -81,11 +88,14 @@ class TestCourtesyPhraseDetection:
         assert result is not None, f"Failed to detect courtesy phrase with punctuation: {message}"
         assert result.state == ConversationState.COURTESY_CLOSE
 
-    @pytest.mark.parametrize("message", [
-        "Hola, gracias",
-        "Hi, thanks",
-        "Hey gracias",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Hola, gracias",
+            "Hi, thanks",
+            "Hey gracias",
+        ],
+    )
     def test_greeting_with_thanks(self, message: str):
         """Test that greetings with thanks are detected as courtesy."""
         analyzer = ConversationStateAnalyzer()
@@ -98,13 +108,16 @@ class TestCourtesyPhraseDetection:
 class TestNotCourtesyMessages:
     """Tests that real job messages are NOT classified as courtesy."""
 
-    @pytest.mark.parametrize("message", [
-        "Hola! Tenemos una posición de Senior Backend Engineer en TechCorp",
-        "Estamos buscando un Python Developer para nuestro equipo",
-        "Te contacto porque vi tu perfil y creo que serías ideal para una posición en nuestra empresa",
-        "Tenemos una oportunidad en Google para un Staff Engineer",
-        "Me gustaría presentarte una posición remota con salario de 150k USD",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Hola! Tenemos una posición de Senior Backend Engineer en TechCorp",
+            "Estamos buscando un Python Developer para nuestro equipo",
+            "Te contacto porque vi tu perfil y creo que serías ideal para una posición en nuestra empresa",
+            "Tenemos una oportunidad en Google para un Staff Engineer",
+            "Me gustaría presentarte una posición remota con salario de 150k USD",
+        ],
+    )
     def test_job_offers_not_courtesy(self, message: str):
         """Test that job offers are NOT detected as courtesy."""
         analyzer = ConversationStateAnalyzer()
@@ -127,9 +140,7 @@ class TestConversationStateResultFactory:
 
     def test_courtesy_close_with_custom_reasoning(self):
         """Test courtesy_close with custom reasoning."""
-        result = ConversationStateResult.courtesy_close(
-            reasoning="Custom test reason"
-        )
+        result = ConversationStateResult.courtesy_close(reasoning="Custom test reason")
 
         assert result.reasoning == "Custom test reason"
 
@@ -159,9 +170,7 @@ class TestWorkWeekFilter:
         )
 
         passed, status = check_work_week_requirement(
-            extracted,
-            "Tenemos semana laboral de 4 días",
-            "4-days"
+            extracted, "Tenemos semana laboral de 4 días", "4-days"
         )
 
         assert passed is True
@@ -175,9 +184,7 @@ class TestWorkWeekFilter:
         )
 
         passed, status = check_work_week_requirement(
-            extracted,
-            "Posición de Senior Engineer",
-            "4-days"
+            extracted, "Posición de Senior Engineer", "4-days"
         )
 
         assert passed is False
@@ -191,9 +198,7 @@ class TestWorkWeekFilter:
         )
 
         passed, status = check_work_week_requirement(
-            extracted,
-            "Posición full time de 5 días a la semana",
-            "4-days"
+            extracted, "Posición full time de 5 días a la semana", "4-days"
         )
 
         assert passed is False
@@ -206,11 +211,7 @@ class TestWorkWeekFilter:
             role="Engineer",
         )
 
-        passed, status = check_work_week_requirement(
-            extracted,
-            "Posición full time",
-            "5-days"
-        )
+        passed, status = check_work_week_requirement(extracted, "Posición full time", "5-days")
 
         assert passed is True
         assert status == "NOT_REQUIRED"
@@ -389,7 +390,7 @@ class TestApplyHardFilters:
             "preferred_remote_policy": "Remote",
             "job_search_status": {
                 "reject_if": [],
-            }
+            },
         }
 
         result = apply_hard_filters(
@@ -427,7 +428,7 @@ class TestApplyHardFilters:
             "preferred_remote_policy": "Remote",
             "job_search_status": {
                 "reject_if": [],
-            }
+            },
         }
 
         result = apply_hard_filters(
@@ -445,12 +446,15 @@ class TestApplyHardFilters:
 class TestNoResponseForCourtesy:
     """Tests verifying that no response is generated for courtesy messages."""
 
-    @pytest.mark.parametrize("message", [
-        "Gracias",
-        "Ok, perfecto",
-        "Dale",
-        "Quedamos así",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Gracias",
+            "Ok, perfecto",
+            "Dale",
+            "Quedamos así",
+        ],
+    )
     def test_no_response_for_courtesy(self, message: str):
         """Verify that courtesy messages should not generate a response."""
         analyzer = ConversationStateAnalyzer()

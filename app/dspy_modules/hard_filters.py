@@ -4,7 +4,6 @@ Hard Filters - Veto filters that must be passed before generating an acceptance 
 These filters implement strict requirements that, if not met, should result in
 a polite decline rather than expressing interest.
 """
-from typing import Dict, List, Optional
 
 from app.core.logging import get_logger
 from app.dspy_modules.models import (
@@ -17,7 +16,7 @@ from app.dspy_modules.models import (
 logger = get_logger(__name__)
 
 
-def get_candidate_status_from_profile(profile_dict: Dict) -> CandidateStatus:
+def get_candidate_status_from_profile(profile_dict: dict) -> CandidateStatus:
     """
     Determine candidate status from profile configuration.
 
@@ -67,9 +66,17 @@ def check_work_week_requirement(
 
     # Check for explicit 4-day week mentions
     four_day_patterns = [
-        "4 días", "4 day", "four day", "4-day", "cuatro días",
-        "semana de 4", "4 day week", "32 hour", "32 horas",
-        "semana laboral reducida", "compressed week",
+        "4 días",
+        "4 day",
+        "four day",
+        "4-day",
+        "cuatro días",
+        "semana de 4",
+        "4 day week",
+        "32 hour",
+        "32 horas",
+        "semana laboral reducida",
+        "compressed week",
     ]
 
     for pattern in four_day_patterns:
@@ -78,9 +85,17 @@ def check_work_week_requirement(
 
     # Check for explicit 5-day week mentions (disqualifying)
     five_day_patterns = [
-        "5 días", "5 day", "five day", "5-day", "cinco días",
-        "semana de 5", "5 day week", "40 hour", "40 horas",
-        "full time standard", "standard work week",
+        "5 días",
+        "5 day",
+        "five day",
+        "5-day",
+        "cinco días",
+        "semana de 5",
+        "5 day week",
+        "40 hour",
+        "40 horas",
+        "full time standard",
+        "standard work week",
     ]
 
     for pattern in five_day_patterns:
@@ -94,7 +109,7 @@ def check_work_week_requirement(
 def check_salary_requirement(
     extracted: ExtractedData,
     minimum_salary_usd: int,
-) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Check if salary meets minimum requirements.
 
@@ -112,13 +127,25 @@ def check_salary_requirement(
     # Get the higher bound if available, otherwise use min
     offered_salary = extracted.salary_max or extracted.salary_min
 
-    # Convert to USD if needed (simple conversion for common currencies)
-    if extracted.currency == "EUR":
-        offered_salary = int(offered_salary * 1.1)  # Approximate EUR to USD
-    elif extracted.currency == "ARS":
-        offered_salary = int(offered_salary / 1000)  # Very rough ARS to USD
+    # Validate offered_salary is a number
+    if not isinstance(offered_salary, int | float):
+        logger.warning("invalid_salary_extracted", salary=offered_salary)
+        # If we extracted something but it's not a number, we shouldn't filter based on it
+        # We assume it's valid to proceed and let human verify
+        return True, None
 
-    if offered_salary < minimum_salary_usd:
+    try:
+        # Convert to USD if needed (simple conversion for common currencies)
+        if extracted.currency == "EUR" and offered_salary:
+            offered_salary = int(offered_salary * 1.1)  # Approximate EUR to USD
+        elif extracted.currency == "ARS" and offered_salary:
+            offered_salary = int(offered_salary / 1000)  # Very rough ARS to USD
+    except Exception as e:
+        logger.error("salary_conversion_error", error=str(e), currency=extracted.currency)
+        # If conversion fails, we skip the filter
+        return True, None
+
+    if offered_salary and offered_salary < minimum_salary_usd:
         return False, f"Salary ({offered_salary:,} USD) below minimum ({minimum_salary_usd:,} USD)"
 
     return True, None
@@ -127,7 +154,7 @@ def check_salary_requirement(
 def check_tech_stack_match(
     scoring: ScoringResult,
     min_tech_match_percent: int = 50,
-) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Check if tech stack match is above threshold.
 
@@ -142,7 +169,10 @@ def check_tech_stack_match(
     tech_match_percent = (scoring.tech_stack_score / 40) * 100
 
     if tech_match_percent < min_tech_match_percent:
-        return False, f"Tech stack match ({tech_match_percent:.0f}%) below threshold ({min_tech_match_percent}%)"
+        return (
+            False,
+            f"Tech stack match ({tech_match_percent:.0f}%) below threshold ({min_tech_match_percent}%)",
+        )
 
     return True, None
 
@@ -150,7 +180,7 @@ def check_tech_stack_match(
 def check_remote_policy(
     extracted: ExtractedData,
     preferred_policy: str,
-) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Check if remote policy matches requirements.
 
@@ -175,8 +205,8 @@ def check_remote_policy(
 def check_reject_criteria(
     extracted: ExtractedData,
     raw_message: str,
-    reject_if: List[str],
-) -> tuple[bool, Optional[str]]:
+    reject_if: list[str],
+) -> tuple[bool, str | None]:
     """
     Check against automatic rejection criteria.
 
@@ -228,7 +258,7 @@ def apply_hard_filters(
     extracted: ExtractedData,
     scoring: ScoringResult,
     raw_message: str,
-    profile_dict: Dict,
+    profile_dict: dict,
 ) -> HardFilterResult:
     """
     Apply all hard filters and return aggregated result.
@@ -242,7 +272,7 @@ def apply_hard_filters(
     Returns:
         HardFilterResult: Aggregated filter results
     """
-    failed_filters: List[str] = []
+    failed_filters: list[str] = []
     score_penalty = 0
     work_week_status = "UNKNOWN"
 
@@ -274,37 +304,35 @@ def apply_hard_filters(
 
     # 2. Check salary requirement
     salary_pass, salary_reason = check_salary_requirement(extracted, minimum_salary)
-    if not salary_pass:
+    if not salary_pass and salary_reason:
         failed_filters.append(salary_reason)
         score_penalty += 40
 
     # 3. Check tech stack match
     tech_pass, tech_reason = check_tech_stack_match(scoring, min_tech_match_percent=50)
-    if not tech_pass:
+    if not tech_pass and tech_reason:
         failed_filters.append(tech_reason)
         score_penalty += 30
 
     # 4. Check remote policy
     remote_pass, remote_reason = check_remote_policy(extracted, preferred_remote)
-    if not remote_pass:
+    if not remote_pass and remote_reason:
         failed_filters.append(remote_reason)
         score_penalty += 40
 
     # 5. Check rejection criteria
-    reject_pass, reject_reason = check_reject_criteria(
-        extracted, raw_message, reject_if
-    )
-    if not reject_pass:
+    reject_pass, reject_reason = check_reject_criteria(extracted, raw_message, reject_if)
+    if not reject_pass and reject_reason:
         failed_filters.append(reject_reason)
         score_penalty += 50
 
     # Determine if we should decline
     # Decline if any critical filter failed or if penalty is too high
     should_decline = len(failed_filters) > 0 and (
-        score_penalty >= 40 or  # High penalty
-        any("5-day work week" in f for f in failed_filters) or  # 5-day week required
-        any("on-site" in f.lower() for f in failed_filters) or  # On-site required
-        any("rejection criterion" in f.lower() for f in failed_filters)  # Matched rejection
+        score_penalty >= 40  # High penalty
+        or any("5-day work week" in f for f in failed_filters)  # 5-day week required
+        or any("on-site" in f.lower() for f in failed_filters)  # On-site required
+        or any("rejection criterion" in f.lower() for f in failed_filters)  # Matched rejection
     )
 
     result = HardFilterResult(

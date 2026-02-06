@@ -3,6 +3,7 @@ Health check endpoints.
 
 Provides endpoints to check application and dependency health.
 """
+
 import httpx
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -88,15 +89,22 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     try:
         import redis.asyncio as aioredis
 
-        redis_client = aioredis.from_url(
-            settings.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-        )
-        await redis_client.ping()
-        checks["redis"] = True
-        await redis_client.close()
-        logger.debug("redis_check", status="healthy")
+        # Check if Redis URL is configured
+        if not settings.REDIS_URL:
+            # If not configured, we consider it unavailable but don't raise an exception
+            # This allows the app to start even if Redis is optional/missing
+            checks["redis"] = False
+            logger.warning("redis_check", status="unconfigured")
+        else:
+            redis_client = aioredis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+            await redis_client.ping()
+            checks["redis"] = True
+            await redis_client.close()
+            logger.debug("redis_check", status="healthy")
     except Exception as e:
         logger.error("redis_check", status="unhealthy", error=str(e))
 

@@ -8,7 +8,6 @@ LinkedIn's rate limiting and prevent account suspension.
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
 
 from app.core.logging import get_logger
 
@@ -42,7 +41,7 @@ class RateLimiter:
 
     config: RateLimitConfig = field(default_factory=RateLimitConfig)
     _request_times: list[float] = field(default_factory=list, init=False)
-    _last_request_time: Optional[float] = field(default=None, init=False)
+    _last_request_time: float | None = field(default=None, init=False)
 
     def wait_if_needed(self) -> None:
         """
@@ -141,7 +140,7 @@ class AdaptiveRateLimiter(RateLimiter):
     If we encounter rate limiting errors, automatically reduces the rate.
     """
 
-    def __init__(self, config: Optional[RateLimitConfig] = None):
+    def __init__(self, config: RateLimitConfig | None = None):
         super().__init__(config=config or RateLimitConfig())
         self._original_config = RateLimitConfig(
             max_requests=self.config.max_requests,
@@ -150,7 +149,7 @@ class AdaptiveRateLimiter(RateLimiter):
             max_delay=self.config.max_delay,
         )
         self._error_count = 0
-        self._last_error_time: Optional[datetime] = None
+        self._last_error_time: datetime | None = None
 
     def report_rate_limit_error(self) -> None:
         """
@@ -163,15 +162,11 @@ class AdaptiveRateLimiter(RateLimiter):
 
         # Reduce rate by 25% each time we hit an error
         reduction_factor = 0.75**self._error_count
-        new_max_requests = max(
-            1, int(self._original_config.max_requests * reduction_factor)
-        )
+        new_max_requests = max(1, int(self._original_config.max_requests * reduction_factor))
         new_min_delay = self._original_config.min_delay / reduction_factor
 
         self.config.max_requests = new_max_requests
-        self.config.min_delay = min(
-            new_min_delay, self._original_config.max_delay * 2
-        )
+        self.config.min_delay = min(new_min_delay, self._original_config.max_delay * 2)
 
         logger.warning(
             "rate_limit_error_reported",

@@ -1,9 +1,10 @@
 """
 Test configuration and fixtures.
 """
+
 import asyncio
-from typing import AsyncGenerator, Generator
-from unittest.mock import MagicMock, Mock
+from collections.abc import AsyncGenerator, Generator
+from unittest.mock import Mock
 
 import pytest
 from httpx import AsyncClient
@@ -11,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.core.config import settings
 from app.database.base import Base
 from app.database.models import Opportunity
 from app.main import app
@@ -50,9 +50,7 @@ async def test_engine():
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create database session for tests."""
-    async_session = sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
         yield session

@@ -1,10 +1,10 @@
 """
 Integration tests for database operations.
 """
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import Opportunity
 from app.database.repositories import OpportunityRepository
 
 
@@ -13,9 +13,7 @@ from app.database.repositories import OpportunityRepository
 class TestDatabaseIntegration:
     """Integration tests for database."""
 
-    async def test_full_crud_flow(
-        self, db_session: AsyncSession, sample_opportunity_data: dict
-    ):
+    async def test_full_crud_flow(self, db_session: AsyncSession, sample_opportunity_data: dict):
         """Test complete CRUD flow."""
         repo = OpportunityRepository(db_session)
 

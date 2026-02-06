@@ -65,21 +65,21 @@ def render_opportunity_email(email_data: OpportunityEmail) -> str:
         if email_data.approve_url:
             buttons.append(
                 f'<a href="{email_data.approve_url}" style="display: inline-block; '
-                f'background: #10b981; color: white; padding: 12px 24px; text-decoration: none; '
+                f"background: #10b981; color: white; padding: 12px 24px; text-decoration: none; "
                 f'border-radius: 6px; font-weight: 600; margin-right: 8px;">✓ Approve & Send</a>'
             )
 
         if email_data.edit_url:
             buttons.append(
                 f'<a href="{email_data.edit_url}" style="display: inline-block; '
-                f'background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; '
+                f"background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; "
                 f'border-radius: 6px; font-weight: 600; margin-right: 8px;">✏️ Edit Response</a>'
             )
 
         if email_data.decline_url:
             buttons.append(
                 f'<a href="{email_data.decline_url}" style="display: inline-block; '
-                f'background: #6b7280; color: white; padding: 12px 24px; text-decoration: none; '
+                f"background: #6b7280; color: white; padding: 12px 24px; text-decoration: none; "
                 f'border-radius: 6px; font-weight: 600;">✗ Decline</a>'
             )
 
@@ -211,10 +211,7 @@ def render_daily_summary_email(email_data: DailySummaryEmail) -> str:
     for opp in email_data.opportunities:
         # Format salary range
         if opp.salary_min and opp.salary_max:
-            salary_range = (
-                f"{opp.currency}{opp.salary_min:,} - "
-                f"{opp.currency}{opp.salary_max:,}"
-            )
+            salary_range = f"{opp.currency}{opp.salary_min:,} - {opp.currency}{opp.salary_max:,}"
         elif opp.salary_min:
             salary_range = f"{opp.currency}{opp.salary_min:,}+"
         else:
@@ -480,8 +477,8 @@ def render_lite_summary_email(email_data: LiteSummaryEmail) -> str:
         <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
             <!-- Status and Tier -->
             <div style="margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
-                <span style="display: inline-block; background: {status['color']}; color: white; padding: 6px 14px; border-radius: 16px; font-weight: 700; font-size: 13px;">
-                    {status['icon']} {status['label']}
+                <span style="display: inline-block; background: {status["color"]}; color: white; padding: 6px 14px; border-radius: 16px; font-weight: 700; font-size: 13px;">
+                    {status["icon"]} {status["label"]}
                 </span>
                 <span style="display: inline-block; background: {tier_color}; color: white; padding: 6px 14px; border-radius: 16px; font-weight: 700; font-size: 13px;">
                     {tier}
@@ -568,19 +565,19 @@ def render_lite_summary_email(email_data: LiteSummaryEmail) -> str:
             <!-- Stats Bar -->
             <div style="background: #1f2937; padding: 16px 24px; display: flex; justify-content: space-around; flex-wrap: wrap;">
                 <div style="text-align: center; padding: 8px 16px;">
-                    <p style="margin: 0; color: #10b981; font-size: 24px; font-weight: 700;">{stats['processed']}</p>
+                    <p style="margin: 0; color: #10b981; font-size: 24px; font-weight: 700;">{stats["processed"]}</p>
                     <p style="margin: 0; color: #9ca3af; font-size: 12px;">Processed</p>
                 </div>
                 <div style="text-align: center; padding: 8px 16px;">
-                    <p style="margin: 0; color: #ef4444; font-size: 24px; font-weight: 700;">{stats['declined']}</p>
+                    <p style="margin: 0; color: #ef4444; font-size: 24px; font-weight: 700;">{stats["declined"]}</p>
                     <p style="margin: 0; color: #9ca3af; font-size: 12px;">Declined</p>
                 </div>
                 <div style="text-align: center; padding: 8px 16px;">
-                    <p style="margin: 0; color: #f59e0b; font-size: 24px; font-weight: 700;">{stats['manual_review']}</p>
+                    <p style="margin: 0; color: #f59e0b; font-size: 24px; font-weight: 700;">{stats["manual_review"]}</p>
                     <p style="margin: 0; color: #9ca3af; font-size: 12px;">Review</p>
                 </div>
                 <div style="text-align: center; padding: 8px 16px;">
-                    <p style="margin: 0; color: #3b82f6; font-size: 24px; font-weight: 700;">{stats['auto_responded']}</p>
+                    <p style="margin: 0; color: #3b82f6; font-size: 24px; font-weight: 700;">{stats["auto_responded"]}</p>
                     <p style="margin: 0; color: #9ca3af; font-size: 12px;">Auto</p>
                 </div>
             </div>

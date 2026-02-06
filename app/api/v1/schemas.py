@@ -1,11 +1,11 @@
 """
 API Schemas - Request/Response models for API endpoints.
 """
+
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ============================================================================
 # Request Schemas
@@ -43,8 +43,8 @@ class OpportunityCreate(BaseModel):
 class OpportunityUpdate(BaseModel):
     """Schema for updating an opportunity."""
 
-    status: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = None
+    status: str | None = Field(None, max_length=50)
+    notes: str | None = None
 
     class Config:
         json_schema_extra = {
@@ -66,35 +66,35 @@ class OpportunityResponse(BaseModel):
     # Identifiers
     id: int
     recruiter_name: str
-    raw_message: Optional[str] = None
+    raw_message: str | None = None
 
     # Extracted data
-    company: Optional[str] = None
-    role: Optional[str] = None
-    seniority: Optional[str] = None
-    tech_stack: List[str] = Field(default_factory=list)
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    currency: Optional[str] = None
-    remote_policy: Optional[str] = None
+    company: str | None = None
+    role: str | None = None
+    seniority: str | None = None
+    tech_stack: list[str] = Field(default_factory=list)
+    salary_min: int | None = None
+    salary_max: int | None = None
+    currency: str | None = None
+    remote_policy: str | None = None
 
     # Scoring
-    tech_stack_score: Optional[int] = None
-    salary_score: Optional[int] = None
-    seniority_score: Optional[int] = None
-    company_score: Optional[int] = None
-    total_score: Optional[int] = None
-    tier: Optional[str] = None
+    tech_stack_score: int | None = None
+    salary_score: int | None = None
+    seniority_score: int | None = None
+    company_score: int | None = None
+    total_score: int | None = None
+    tier: str | None = None
 
     # AI Response
-    ai_response: Optional[str] = None
+    ai_response: str | None = None
 
     # Conversation Classification (NEW)
-    conversation_state: Optional[str] = Field(
+    conversation_state: str | None = Field(
         None,
         description="Conversation state: NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
     )
-    processing_status: Optional[str] = Field(
+    processing_status: str | None = Field(
         None,
         description="Processing status: processed, ignored, declined, manual_review, auto_responded",
     )
@@ -104,24 +104,24 @@ class OpportunityResponse(BaseModel):
         False,
         description="Whether this opportunity needs manual human review",
     )
-    manual_review_reason: Optional[str] = Field(
+    manual_review_reason: str | None = Field(
         None,
         description="Reason why manual review is required",
     )
 
     # Detailed Results (NEW - JSON)
-    hard_filter_results: Optional[Dict[str, Any]] = Field(
+    hard_filter_results: dict[str, Any] | None = Field(
         None,
         description="Results from hard filter checks (work_week, salary, tech_match, etc.)",
     )
-    follow_up_analysis: Optional[Dict[str, Any]] = Field(
+    follow_up_analysis: dict[str, Any] | None = Field(
         None,
         description="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
     )
 
     # Metadata
     status: str
-    processing_time_ms: Optional[int] = None
+    processing_time_ms: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -168,7 +168,7 @@ class OpportunityResponse(BaseModel):
 class OpportunityListResponse(BaseModel):
     """Schema for paginated opportunity list response."""
 
-    items: List[OpportunityResponse]
+    items: list[OpportunityResponse]
     total: int
     skip: int
     limit: int
@@ -206,11 +206,11 @@ class OpportunityStats(BaseModel):
     by_status: dict
 
     # New classification stats
-    by_conversation_state: Optional[dict] = Field(
+    by_conversation_state: dict | None = Field(
         None,
         description="Count by conversation state: NEW_OPPORTUNITY, FOLLOW_UP, COURTESY_CLOSE",
     )
-    by_processing_status: Optional[dict] = Field(
+    by_processing_status: dict | None = Field(
         None,
         description="Count by processing status: processed, ignored, declined, manual_review, auto_responded",
     )
@@ -220,9 +220,9 @@ class OpportunityStats(BaseModel):
     )
 
     # Score metrics
-    average_score: Optional[float] = None
-    highest_score: Optional[int] = None
-    lowest_score: Optional[int] = None
+    average_score: float | None = None
+    highest_score: int | None = None
+    lowest_score: int | None = None
 
     class Config:
         json_schema_extra = {

@@ -4,10 +4,9 @@ LinkedIn message sending service.
 Handles sending responses to LinkedIn conversations using Playwright.
 """
 
-from typing import Optional
-
 import structlog
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from app.core.config import settings
 from app.core.exceptions import ScraperError
@@ -21,7 +20,9 @@ logger = structlog.get_logger(__name__)
 class LinkedInMessenger:
     """Service for sending messages to LinkedIn."""
 
-    def __init__(self, email: Optional[str] = None, password: Optional[str] = None, headless: bool = True):
+    def __init__(
+        self, email: str | None = None, password: str | None = None, headless: bool = True
+    ):
         """
         Initialize LinkedIn messenger.
 
@@ -64,7 +65,9 @@ class LinkedInMessenger:
         except Exception as e:
             logger.error("linkedin_messenger_initialization_failed", error=str(e), exc_info=True)
             await self.cleanup()
-            raise ScraperError(message="Failed to initialize LinkedIn messenger", details={"error": str(e)}) from e
+            raise ScraperError(
+                message="Failed to initialize LinkedIn messenger", details={"error": str(e)}
+            ) from e
 
     async def _login(self, page: Page) -> None:
         """
@@ -115,7 +118,9 @@ class LinkedInMessenger:
 
         except Exception as e:
             logger.error("linkedin_login_failed", error=str(e), exc_info=True)
-            raise ScraperError(message="Failed to login to LinkedIn", details={"error": str(e)}) from e
+            raise ScraperError(
+                message="Failed to login to LinkedIn", details={"error": str(e)}
+            ) from e
 
     async def send_message(self, conversation_url: str, message: str) -> bool:
         """
@@ -138,7 +143,11 @@ class LinkedInMessenger:
             )
 
         try:
-            logger.info("sending_linkedin_message", conversation_url=conversation_url, message_length=len(message))
+            logger.info(
+                "sending_linkedin_message",
+                conversation_url=conversation_url,
+                message_length=len(message),
+            )
 
             page = await self.session_manager.get_page()
 
@@ -169,7 +178,9 @@ class LinkedInMessenger:
             return True
 
         except PlaywrightTimeoutError as e:
-            logger.error("linkedin_message_send_timeout", conversation_url=conversation_url, error=str(e))
+            logger.error(
+                "linkedin_message_send_timeout", conversation_url=conversation_url, error=str(e)
+            )
             raise ScraperError(
                 message="Timeout while sending LinkedIn message",
                 details={"conversation_url": conversation_url, "error": str(e)},
@@ -200,7 +211,7 @@ class LinkedInMessenger:
 class LinkedInResponseService:
     """Service for sending approved responses to LinkedIn."""
 
-    def __init__(self, messenger: Optional[LinkedInMessenger] = None):
+    def __init__(self, messenger: LinkedInMessenger | None = None):
         """
         Initialize response service.
 
@@ -240,7 +251,9 @@ class LinkedInResponseService:
             # Get the conversation URL from the opportunity
             # TODO: Store conversation URL in Opportunity model
             # For now, we'll need to construct it or store it
-            conversation_url = f"https://www.linkedin.com/messaging/thread/{pending_response.opportunity_id}/"
+            conversation_url = (
+                f"https://www.linkedin.com/messaging/thread/{pending_response.opportunity_id}/"
+            )
 
             # Send the message
             message_to_send = pending_response.final_response or pending_response.original_response

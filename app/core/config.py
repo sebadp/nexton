@@ -2,7 +2,8 @@
 Application configuration using Pydantic Settings.
 Reads from environment variables and .env file.
 """
-from typing import Literal, Optional
+
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,12 +36,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     # Database (Optional for lite mode)
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str | None = None
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 0
 
     # Redis (Optional for lite mode)
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: str | None = None
     REDIS_MAX_CONNECTIONS: int = 50
 
     # AI/ML - Multi-LLM Support
@@ -62,16 +63,16 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "llama2"
 
     # Per-module LLM configuration (optional)
-    ANALYZER_LLM_PROVIDER: Optional[str] = None
-    ANALYZER_LLM_MODEL: Optional[str] = None
-    SCORER_LLM_PROVIDER: Optional[str] = None
-    SCORER_LLM_MODEL: Optional[str] = None
-    RESPONSE_LLM_PROVIDER: Optional[str] = None
-    RESPONSE_LLM_MODEL: Optional[str] = None
+    ANALYZER_LLM_PROVIDER: str | None = None
+    ANALYZER_LLM_MODEL: str | None = None
+    SCORER_LLM_PROVIDER: str | None = None
+    SCORER_LLM_MODEL: str | None = None
+    RESPONSE_LLM_PROVIDER: str | None = None
+    RESPONSE_LLM_MODEL: str | None = None
 
     # Celery (Optional for lite mode)
-    CELERY_BROKER_URL: Optional[str] = None
-    CELERY_RESULT_BACKEND: Optional[str] = None
+    CELERY_BROKER_URL: str | None = None
+    CELERY_RESULT_BACKEND: str | None = None
     CELERY_WORKER_CONCURRENCY: int = 4
 
     # Observability
@@ -134,7 +135,7 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
-    def build_database_url(cls, v: Optional[str], info) -> Optional[str]:
+    def build_database_url(cls, v: str | None, info) -> str | None:
         """Build database URL for async driver if needed."""
         if v and "postgresql://" in v and "asyncpg" not in v:
             return v.replace("postgresql://", "postgresql+asyncpg://")

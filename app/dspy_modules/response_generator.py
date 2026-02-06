@@ -4,6 +4,7 @@ ResponseGenerator - DSPy module to generate personalized responses.
 Creates professional, context-aware responses to recruiters based
 on the opportunity score and details.
 """
+
 import dspy
 
 from app.core.logging import get_logger
@@ -34,9 +35,9 @@ class ResponseGenerator(dspy.Module):
         extracted: ExtractedData,
         scoring: ScoringResult,
         candidate_name: str = "Sebastián",
-        profile: dict = None,
+        profile: dict | None = None,
         candidate_status: CandidateStatus = CandidateStatus.PASSIVE,
-        hard_filter_result: HardFilterResult = None,
+        hard_filter_result: HardFilterResult | None = None,
     ) -> str:
         """
         Generate a response to the recruiter.
@@ -81,9 +82,7 @@ class ResponseGenerator(dspy.Module):
         try:
             # Prepare salary info
             if extracted.salary_min and extracted.salary_max:
-                salary_range = (
-                    f"{extracted.salary_min}-{extracted.salary_max} {extracted.currency}"
-                )
+                salary_range = f"{extracted.salary_min}-{extracted.salary_max} {extracted.currency}"
             elif extracted.salary_min:
                 salary_range = f"{extracted.salary_min}+ {extracted.currency}"
             else:
@@ -93,7 +92,11 @@ class ResponseGenerator(dspy.Module):
             candidate_context = self._build_candidate_context(profile)
 
             # Prepare failed filters string
-            failed_hard_filters = ", ".join(hard_filter_result.failed_filters) if hard_filter_result.failed_filters else ""
+            failed_hard_filters = (
+                ", ".join(hard_filter_result.failed_filters)
+                if hard_filter_result.failed_filters
+                else ""
+            )
 
             # Determine work week status
             work_week_mentioned = hard_filter_result.work_week_status
@@ -153,7 +156,7 @@ class ResponseGenerator(dspy.Module):
                 failed_filters_count=len(hard_filter_result.failed_filters),
             )
 
-            return response
+            return str(response)
 
         except Exception as e:
             logger.error("response_generator_failed", error=str(e))
@@ -167,7 +170,7 @@ class ResponseGenerator(dspy.Module):
                 hard_filter_result,
             )
 
-    def _build_candidate_context(self, profile: dict = None) -> str:
+    def _build_candidate_context(self, profile: dict | None = None) -> str:
         """
         Build candidate context string from profile.
 
@@ -200,9 +203,13 @@ class ResponseGenerator(dspy.Module):
             elif urgency == "moderate" and actively_looking:
                 context_parts.append("Actively looking for the right opportunity.")
             elif urgency == "selective":
-                context_parts.append("Open to exceptional opportunities that meet specific criteria.")
+                context_parts.append(
+                    "Open to exceptional opportunities that meet specific criteria."
+                )
             else:
-                context_parts.append("Currently not looking, but open to outstanding opportunities.")
+                context_parts.append(
+                    "Currently not looking, but open to outstanding opportunities."
+                )
 
             # Must-have requirements
             must_haves = job_status.get("must_have", [])
@@ -214,22 +221,20 @@ class ResponseGenerator(dspy.Module):
             # Nice to have
             nice_to_haves = job_status.get("nice_to_have", [])
             if nice_to_haves:
-                context_parts.append(
-                    "Nice to have: " + ", ".join(nice_to_haves[:3])  # Limit to 3
-                )
+                context_parts.append("Nice to have: " + ", ".join(nice_to_haves[:3]))  # Limit to 3
 
             # Automatic rejection criteria
             reject_if = job_status.get("reject_if", [])
             if reject_if:
-                context_parts.append(
-                    "Will automatically decline: " + ", ".join(reject_if[:3])
-                )
+                context_parts.append("Will automatically decline: " + ", ".join(reject_if[:3]))
 
         # Additional preferences
         if profile.get("looking_for_change"):
             context_parts.append("Open to changing jobs.")
         else:
-            context_parts.append("Happy in current role, only interested in exceptional opportunities.")
+            context_parts.append(
+                "Happy in current role, only interested in exceptional opportunities."
+            )
 
         return " ".join(context_parts)
 
@@ -240,7 +245,7 @@ class ResponseGenerator(dspy.Module):
         scoring: ScoringResult,
         candidate_name: str,
         candidate_status: CandidateStatus = CandidateStatus.PASSIVE,
-        hard_filter_result: HardFilterResult = None,
+        hard_filter_result: HardFilterResult | None = None,
     ) -> str:
         """
         Generate a fallback response when LLM fails.
@@ -274,7 +279,10 @@ class ResponseGenerator(dspy.Module):
         # Priority 1: Check if hard filters failed and we should decline
         if hard_filter_result.should_decline:
             # Generate decline response based on failed filters
-            if "4-day work week" in str(hard_filter_result.failed_filters) or "work week" in str(hard_filter_result.failed_filters).lower():
+            if (
+                "4-day work week" in str(hard_filter_result.failed_filters)
+                or "work week" in str(hard_filter_result.failed_filters).lower()
+            ):
                 response = f"""Hola {recruiter_name},
 
 Gracias por pensar en mí para la posición de {extracted.role} en {extracted.company}.
@@ -286,7 +294,11 @@ Saludos,
 
 *Nota: Esta respuesta fue generada con asistencia de IA como herramienta de productividad."""
             else:
-                failed_reasons = ", ".join(hard_filter_result.failed_filters[:2]) if hard_filter_result.failed_filters else "mis requisitos actuales"
+                failed_reasons = (
+                    ", ".join(hard_filter_result.failed_filters[:2])
+                    if hard_filter_result.failed_filters
+                    else "mis requisitos actuales"
+                )
                 response = f"""Hola {recruiter_name},
 
 Gracias por contactarme sobre {extracted.role} en {extracted.company}.
@@ -322,7 +334,7 @@ Saludos,
 
 Muchas gracias por contactarme sobre la posición de {extracted.role} en {extracted.company}.
 
-Me interesa mucho esta oportunidad. Mi experiencia con {', '.join(extracted.tech_stack[:3]) if extracted.tech_stack else 'las tecnologías mencionadas'} se alinea bien con lo que buscan, y me gustaría conocer más detalles sobre el proyecto y el equipo.
+Me interesa mucho esta oportunidad. Mi experiencia con {", ".join(extracted.tech_stack[:3]) if extracted.tech_stack else "las tecnologías mencionadas"} se alinea bien con lo que buscan, y me gustaría conocer más detalles sobre el proyecto y el equipo.
 
 ¿Podríamos agendar una llamada esta semana para conversar?
 

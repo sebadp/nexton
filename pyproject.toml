@@ -75,8 +75,12 @@ pyyaml = "^6.0.1"
 python-dateutil = "^2.8.2"
 pytz = "^2024.1"
 tenacity = "^8.2.3"
+cloudpickle = "^3.1.2"
+google-generativeai = "^0.8.6"
 
 [tool.poetry.group.dev.dependencies]
+PyGithub = "^2.1.1"
+requests = "^2.31.0"
 # Testing
 pytest = "^7.4.4"
 pytest-asyncio = "^0.23.3"
@@ -195,6 +199,12 @@ exclude = [
 
 [tool.ruff.isort]
 known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"scripts/*" = ["E402"]
+"test_*.py" = ["E402"]
+"tests/*" = ["F841", "B017", "B007", "E402"]
 
 # ==========================================
 # MYPY CONFIGURATION
