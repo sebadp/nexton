@@ -72,10 +72,27 @@ def configure_llm():
     provider = os.getenv("LLM_PROVIDER", settings.LLM_PROVIDER)
     model = os.getenv("LLM_MODEL", settings.LLM_MODEL)
 
-    if gemini_key:
-        print(f"Configuring AI Reviewer with Gemini ({model or 'gemini-1.5-pro'})")
+    # Determine which provider to use
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+
+    use_gemini = False
+    if provider == "gemini" and gemini_key:
+        use_gemini = True
+    elif gemini_key and not has_openai:
+        use_gemini = True
+    elif gemini_key and provider not in ["openai", "anthropic"]:
+        # If provider is unset or unknown, and we have a gemini key, prefer it
+        use_gemini = True
+
+    if use_gemini:
+        # Sanitize model: if it looks like a GPT model or is missing, default to a safe Gemini model
+        target_model = model
+        if not target_model or target_model.startswith("gpt") or "gemini" not in target_model:
+            target_model = "models/gemini-1.5-flash"
+
+        print(f"Configuring AI Reviewer with Gemini ({target_model})")
         # Configure Gemini
-        lm = dspy.Google(model=model or "models/gemini-1.5-pro", api_key=gemini_key)
+        lm = dspy.Google(model=target_model, api_key=gemini_key)
         dspy.settings.configure(lm=lm)
         return
 

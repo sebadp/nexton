@@ -115,7 +115,6 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install --no-interaction --no-root
-          poetry add PyGithub requests
 
       - name: Run AI Reviewer
         env:
@@ -154,7 +153,6 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install --no-interaction --no-root
-          poetry add PyGithub requests
 
       - name: Run AI Description Generator
         env:
