@@ -9,7 +9,7 @@ import os
 import sys
 
 import dspy
-from github import Github
+from github import Auth, Github
 from github.PullRequest import PullRequest
 from pydantic import BaseModel
 
@@ -60,8 +60,15 @@ def configure_llm():
     model = os.getenv("LLM_MODEL", settings.LLM_MODEL)
 
     if gemini_key:
+        # Configure Gemini
         print(f"Configuring AI Describer with Gemini ({model or 'gemini-1.5-pro'})")
-        lm = dspy.Google(model=model or "models/gemini-1.5-pro", api_key=gemini_key)
+
+        # Use dspy.LM for unified interface
+        final_model_name = model or "gemini-1.5-pro"
+        if not final_model_name.startswith("gemini/") and "gemini" in final_model_name:
+            final_model_name = "gemini/" + final_model_name.replace("models/", "")
+
+        lm = dspy.LM(model=final_model_name, api_key=gemini_key)
         dspy.settings.configure(lm=lm)
         return
 
@@ -100,7 +107,7 @@ def main():
         print("Error: GITHUB_TOKEN or repo name missing")
         sys.exit(1)
 
-    gh = Github(token)
+    gh = Github(auth=Auth.Token(token))
     try:
         repo = gh.get_repo(args.repo)
         pr = repo.get_pull(args.pr)
