@@ -114,7 +114,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction --no-root
+          pip install -r requirements-ai-review.txt
 
       - name: Run AI Reviewer
         env:
@@ -126,7 +126,7 @@ jobs:
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openai' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4-turbo-preview' }}
         run: |
-          poetry run python scripts/ai_pr_reviewer.py --pr ${{ github.event.pull_request.number }}
+          python scripts/ai_pr_reviewer.py --pr ${{ github.event.pull_request.number }}
 
   ai-description:
     name: AI PR Description
@@ -152,7 +152,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction --no-root
+          pip install -r requirements-ai-review.txt
 
       - name: Run AI Description Generator
         env:
@@ -163,4 +163,4 @@ jobs:
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openai' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4-turbo-preview' }}
         run: |
-          poetry run python scripts/ai_pr_description.py --pr ${{ github.event.pull_request.number }}
+          python scripts/ai_pr_description.py --pr ${{ github.event.pull_request.number }}
