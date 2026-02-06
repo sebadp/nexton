@@ -61,10 +61,10 @@ def configure_llm():
 
     if gemini_key:
         # Configure Gemini
-        print(f"Configuring AI Describer with Gemini ({model or 'gemini-1.5-pro'})")
+        print(f"Configuring AI Describer with Gemini ({model or 'gemini-2.0-flash'})")
 
         # Use dspy.LM for unified interface
-        final_model_name = model or "gemini-1.5-pro"
+        final_model_name = model or "gemini-2.0-flash"
         if not final_model_name.startswith("gemini/") and "gemini" in final_model_name:
             final_model_name = "gemini/" + final_model_name.replace("models/", "")
 

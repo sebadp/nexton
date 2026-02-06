@@ -88,7 +88,7 @@ def configure_llm():
         # Sanitize model: if it looks like a GPT model or is missing, default to a safe Gemini model
         target_model = model
         if not target_model or target_model.startswith("gpt") or "gemini" not in target_model:
-            target_model = "models/gemini-1.5-flash"
+            target_model = "models/gemini-2.0-flash"
 
         print(f"Configuring AI Reviewer with Gemini ({target_model})")
         # Configure Gemini
@@ -102,6 +102,10 @@ def configure_llm():
             # e.g. "models/gemini-1.5-flash" -> "gemini/gemini-1.5-flash"
             # Strip 'models/' if present to be clean
             final_model_name = "gemini/" + final_model_name.replace("models/", "")
+
+        # BRIEF-LY COMPATIBILITY: Default to gemini-2.0-flash if fallback was hit
+        if final_model_name == "gemini/gemini-1.5-flash":
+            final_model_name = "gemini/gemini-2.0-flash"
 
         lm = dspy.LM(model=final_model_name, api_key=gemini_key)
         dspy.settings.configure(lm=lm)
