@@ -127,11 +127,23 @@ def check_salary_requirement(
     # Get the higher bound if available, otherwise use min
     offered_salary = extracted.salary_max or extracted.salary_min
 
-    # Convert to USD if needed (simple conversion for common currencies)
-    if extracted.currency == "EUR" and offered_salary:
-        offered_salary = int(offered_salary * 1.1)  # Approximate EUR to USD
-    elif extracted.currency == "ARS" and offered_salary:
-        offered_salary = int(offered_salary / 1000)  # Very rough ARS to USD
+    # Validate offered_salary is a number
+    if not isinstance(offered_salary, int | float):
+        logger.warning("invalid_salary_extracted", salary=offered_salary)
+        # If we extracted something but it's not a number, we shouldn't filter based on it
+        # We assume it's valid to proceed and let human verify
+        return True, None
+
+    try:
+        # Convert to USD if needed (simple conversion for common currencies)
+        if extracted.currency == "EUR" and offered_salary:
+            offered_salary = int(offered_salary * 1.1)  # Approximate EUR to USD
+        elif extracted.currency == "ARS" and offered_salary:
+            offered_salary = int(offered_salary / 1000)  # Very rough ARS to USD
+    except Exception as e:
+        logger.error("salary_conversion_error", error=str(e), currency=extracted.currency)
+        # If conversion fails, we skip the filter
+        return True, None
 
     if offered_salary and offered_salary < minimum_salary_usd:
         return False, f"Salary ({offered_salary:,} USD) below minimum ({minimum_salary_usd:,} USD)"

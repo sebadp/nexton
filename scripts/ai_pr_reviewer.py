@@ -56,8 +56,12 @@ class CodeReviewer(dspy.Signature):
 def get_pr_diff(pr: PullRequest) -> str:
     """Get the formatted diff of the PR."""
     diffs = []
+    extensions = os.getenv("REVIEW_EXTENSIONS", ".py").split(",")
+    extensions = [ext.strip() for ext in extensions if ext.strip()]
+
     for file in pr.get_files():
-        if file.status == "removed" or not file.filename.endswith(".py"):
+        # Check if file matches any extension
+        if file.status == "removed" or not any(file.filename.endswith(ext) for ext in extensions):
             continue
 
         diffs.append(f"File: {file.filename}\nStatus: {file.status}\nPatch:\n{file.patch}\n")
@@ -181,6 +185,8 @@ def main():
         # because mapping patch lines to PR position requires more logic.
 
         findings_body = "### 🔍 Findings\n\n"
+        critical_count = 0
+
         for correction in review_data.corrections:
             icon = (
                 "🔴"
@@ -189,12 +195,23 @@ def main():
                 if correction.severity == "warning"
                 else "ℹ️"
             )
+            if correction.severity == "critical":
+                critical_count += 1
+
             findings_body += f"- {icon} **{correction.file_path}**: {correction.comment}\n"
             if correction.suggestion:
                 findings_body += f"  ```python\n  {correction.suggestion}\n  ```\n"
 
+        # Add blocking message if critical issues found
+        if critical_count > 0:
+            findings_body += f"\n\n> [!CAUTION]\n> **Blocking PR**: Found {critical_count} critical issue(s). Please fix them before merging."
+
         pr.create_issue_comment(findings_body)
         print("Review posted successfully.")
+
+        if critical_count > 0:
+            print(f"Blocking PR: Found {critical_count} critical issues.")
+            sys.exit(1)
 
     except Exception as e:
         print(f"AI Review failed: {e}")

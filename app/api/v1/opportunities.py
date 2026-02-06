@@ -191,6 +191,7 @@ async def list_opportunities(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     tier: str | None = Query(
         None,
+        alias="priority",
         description="Filter by tier (HIGH_PRIORITY, INTERESANTE, POCO_INTERESANTE, NO_INTERESA)",
     ),
     opp_status: str | None = Query(None, alias="status", description="Filter by status"),

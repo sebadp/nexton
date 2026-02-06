@@ -65,24 +65,9 @@ class UserProfile:
             variations.append(first_name)
 
             # Add version without accents (e.g., Sebastián -> Sebastian)
-            # Simple accent removal for common Spanish characters
-            accent_map = {
-                "á": "a",
-                "é": "e",
-                "í": "i",
-                "ó": "o",
-                "ú": "u",
-                "Á": "A",
-                "É": "E",
-                "Í": "I",
-                "Ó": "O",
-                "Ú": "U",
-                "ñ": "n",
-                "Ñ": "N",
-            }
-            first_name_no_accent = first_name
-            for accented, plain in accent_map.items():
-                first_name_no_accent = first_name_no_accent.replace(accented, plain)
+            from unidecode import unidecode
+
+            first_name_no_accent = unidecode(first_name)
 
             if first_name_no_accent != first_name:
                 variations.append(first_name_no_accent)

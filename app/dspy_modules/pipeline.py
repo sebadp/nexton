@@ -429,6 +429,7 @@ def configure_dspy(
         logger.error(
             "dspy_configuration_failed",
             extra={"provider": provider_type, "model": model_name, "error": str(e)},
+            exc_info=True,
         )
         raise PipelineError(
             message=f"Failed to configure DSPy with {provider_type}",

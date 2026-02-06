@@ -5,6 +5,7 @@ Supports local Ollama models (llama2, mistral, codellama, etc.).
 """
 
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.logging import get_logger
 from app.llm.base import LLMProvider
@@ -44,6 +45,14 @@ class OllamaProvider(LLMProvider):
         """Ollama is free (local)."""
         return 0.0
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(
+            (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)
+        ),
+        reraise=True,
+    )
     async def complete(
         self,
         prompt: str,

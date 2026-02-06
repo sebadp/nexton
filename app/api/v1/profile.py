@@ -76,6 +76,10 @@ async def get_profile() -> ProfileSchema:
         data = _load_profile()
         return ProfileSchema(**data)
     except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.exception("Failed to load profile", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to load profile: {str(e)}") from e
 
 
