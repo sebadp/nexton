@@ -1,7 +1,7 @@
 """
 Unit tests for health check endpoints.
 """
-import pytest
+
 from httpx import AsyncClient
 
 

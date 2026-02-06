@@ -7,9 +7,9 @@ Scrapes LinkedIn messages with rate limiting and retry logic.
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
 
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from app.core.exceptions import ScraperError
 from app.core.logging import get_logger
@@ -29,7 +29,7 @@ class LinkedInMessage:
     timestamp: datetime
     conversation_url: str
     is_read: bool = False
-    message_id: Optional[str] = None
+    message_id: str | None = None
     is_from_user: bool = False  # True if the last message is from the user (not recruiter)
 
 
@@ -148,8 +148,8 @@ class LinkedInScraper:
             logger.error("cleanup_error", error=str(e))
 
     async def scrape_messages(
-        self, limit: Optional[int] = None, unread_only: bool = True
-    ) -> List[LinkedInMessage]:
+        self, limit: int | None = None, unread_only: bool = True
+    ) -> list[LinkedInMessage]:
         """
         Scrape messages from LinkedIn inbox.
 
@@ -169,25 +169,21 @@ class LinkedInScraper:
                 details={"method": "scrape_messages"},
             )
 
-        messages: List[LinkedInMessage] = []
+        messages: list[LinkedInMessage] = []
 
         try:
-            logger.info(
-                "starting_message_scrape", limit=limit, unread_only=unread_only
-            )
+            logger.info("starting_message_scrape", limit=limit, unread_only=unread_only)
 
             page = await self.session_manager.get_page()
 
             # Navigate to messaging page with rate limiting
-            await self._navigate_with_retry(
-                page, "https://www.linkedin.com/messaging/"
-            )
+            await self._navigate_with_retry(page, "https://www.linkedin.com/messaging/")
 
             # Wait for messages to load - try multiple selectors
             # LinkedIn changes their class names frequently, so we try several
             selectors_to_try = [
                 'ul[class*="msg-conversations-container"]',
-                'ul.msg-conversations-container__conversations-list',
+                "ul.msg-conversations-container__conversations-list",
                 'div[role="navigation"] ul',
                 'main ul[class*="list"]',
             ]
@@ -211,7 +207,7 @@ class LinkedInScraper:
             # Get all conversation items - try multiple selectors
             conversation_selectors = [
                 'li[class*="msg-conversation-listitem"]',
-                'li.msg-conversation-listitem__link',
+                "li.msg-conversation-listitem__link",
                 'ul li[data-test-id*="conversation"]',
                 'main li[class*="conversation"]',
             ]
@@ -319,9 +315,7 @@ class LinkedInScraper:
                 message="Failed to scrape messages", details={"error": str(e)}
             ) from e
 
-    async def _extract_message_from_conversation(
-        self, page: Page
-    ) -> Optional[LinkedInMessage]:
+    async def _extract_message_from_conversation(self, page: Page) -> LinkedInMessage | None:
         """
         Extract message details from the currently open conversation.
 
@@ -335,7 +329,7 @@ class LinkedInScraper:
             # Wait for message content to load - try multiple selectors
             message_list_selectors = [
                 'div[class*="msg-s-message-list"]',
-                'div.msg-s-message-list-container',
+                "div.msg-s-message-list-container",
                 'main div[role="main"]',
             ]
 
@@ -355,8 +349,8 @@ class LinkedInScraper:
             # Get sender name from header - try multiple selectors
             sender_selectors = [
                 'h2[class*="msg-entity-lockup__entity-title"]',
-                'h2.msg-entity-lockup__entity-title',
-                'header h2',
+                "h2.msg-entity-lockup__entity-title",
+                "header h2",
                 'div[class*="thread-details"] h2',
             ]
 
@@ -371,7 +365,7 @@ class LinkedInScraper:
             # Get the most recent message text - try multiple selectors
             messages_list_selectors = [
                 'li[class*="msg-s-message-list__event"]',
-                'ul.msg-s-message-list li',
+                "ul.msg-s-message-list li",
                 'div[class*="message-item"]',
                 'div[class*="msg-s-event-listitem"]',
             ]
@@ -408,7 +402,9 @@ class LinkedInScraper:
             if not is_from_user:
                 try:
                     # Look for "You" indicator - LinkedIn adds this before user's own messages
-                    you_indicator = await last_message.query_selector('[data-test-link-to-profile-for="self"]')
+                    you_indicator = await last_message.query_selector(
+                        '[data-test-link-to-profile-for="self"]'
+                    )
                     if you_indicator:
                         is_from_user = True
                         logger.debug("you_indicator_found", is_from_user=True)
@@ -421,12 +417,16 @@ class LinkedInScraper:
                 try:
                     # Get all message elements to check who sent the last one
                     # Look for message sender info within the message
-                    sender_in_message = await last_message.query_selector('[data-test-id*="sender"]')
+                    sender_in_message = await last_message.query_selector(
+                        '[data-test-id*="sender"]'
+                    )
                     if sender_in_message:
                         sender_text = await sender_in_message.inner_text()
                         # Check if it says "You" or similar
                         is_from_user = sender_text.lower().strip() in ["you", "tú", "tu"]
-                        logger.debug("sender_text_check", is_from_user=is_from_user, sender_text=sender_text)
+                        logger.debug(
+                            "sender_text_check", is_from_user=is_from_user, sender_text=sender_text
+                        )
                 except Exception as e:
                     logger.debug("sender_text_check_failed", error=str(e))
 
@@ -442,16 +442,28 @@ class LinkedInScraper:
                     try:
                         user_profile = get_user_profile()
                         user_name_variations = user_profile.name_variations
-                        logger.debug("loaded_user_profile", name=user_profile.name, variations=user_name_variations)
+                        logger.debug(
+                            "loaded_user_profile",
+                            name=user_profile.name,
+                            variations=user_name_variations,
+                        )
                     except Exception as profile_err:
                         logger.warning("failed_to_load_user_profile", error=str(profile_err))
                         user_name_variations = []
 
                     # Build signature list: user's name variations + common closing phrases
                     common_closings = [
-                        "¡abrazo!", "abrazo!", "saludos", "thanks", "thank you",
-                        "regards", "best regards", "cheers", "cordialmente",
-                        "un abrazo", "muchas gracias"
+                        "¡abrazo!",
+                        "abrazo!",
+                        "saludos",
+                        "thanks",
+                        "thank you",
+                        "regards",
+                        "best regards",
+                        "cheers",
+                        "cordialmente",
+                        "un abrazo",
+                        "muchas gracias",
                     ]
 
                     # Combine user's names with common closings
@@ -461,7 +473,9 @@ class LinkedInScraper:
                     for signature in user_signatures:
                         if signature and lower_text.endswith(signature.lower()):
                             is_from_user = True
-                            logger.debug("signature_detected", is_from_user=True, signature=signature)
+                            logger.debug(
+                                "signature_detected", is_from_user=True, signature=signature
+                            )
                             break
                 except Exception as e:
                     logger.debug("signature_check_failed", error=str(e))
@@ -483,7 +497,7 @@ class LinkedInScraper:
             message_text_selectors = [
                 'p[class*="msg-s-event-listitem__body"]',
                 'div[class*="msg-s-event-listitem__body"]',
-                'div.msg-s-event-listitem__message-body',
+                "div.msg-s-event-listitem__message-body",
                 'p[dir="ltr"]',
             ]
 
@@ -519,9 +533,7 @@ class LinkedInScraper:
             logger.error("failed_to_extract_message", error=str(e))
             return None
 
-    async def _navigate_with_retry(
-        self, page: Page, url: str, retries: int = 3
-    ) -> None:
+    async def _navigate_with_retry(self, page: Page, url: str, retries: int = 3) -> None:
         """
         Navigate to URL with retry logic.
 
@@ -605,9 +617,7 @@ class LinkedInScraper:
             page = await self.session_manager.get_page()
 
             # Navigate to messaging
-            await self._navigate_with_retry(
-                page, "https://www.linkedin.com/messaging/"
-            )
+            await self._navigate_with_retry(page, "https://www.linkedin.com/messaging/")
 
             # Count unread indicators - try multiple selectors
             unread_selectors = [

@@ -2,9 +2,10 @@
 Integration tests for metrics API endpoint.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 
 from app.main import app
 

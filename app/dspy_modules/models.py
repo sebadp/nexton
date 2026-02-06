@@ -4,8 +4,8 @@ Pydantic models for DSPy pipeline data structures.
 These models provide type safety and validation for data
 flowing through the pipeline.
 """
+
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,9 +40,7 @@ class CandidateStatus(str, Enum):
 class ConversationStateResult(BaseModel):
     """Result of conversation state analysis."""
 
-    state: ConversationState = Field(
-        description="The classified conversation state"
-    )
+    state: ConversationState = Field(description="The classified conversation state")
     confidence: str = Field(
         description="Confidence level: HIGH, MEDIUM, LOW",
         default="MEDIUM",
@@ -61,7 +59,9 @@ class ConversationStateResult(BaseModel):
     )
 
     @classmethod
-    def courtesy_close(cls, reasoning: str = "Message is a simple courtesy/acknowledgment") -> "ConversationStateResult":
+    def courtesy_close(
+        cls, reasoning: str = "Message is a simple courtesy/acknowledgment"
+    ) -> "ConversationStateResult":
         """Factory for COURTESY_CLOSE state."""
         return cls(
             state=ConversationState.COURTESY_CLOSE,
@@ -75,10 +75,8 @@ class ConversationStateResult(BaseModel):
 class HardFilterResult(BaseModel):
     """Result of hard filter validation."""
 
-    passed: bool = Field(
-        description="Whether all hard filters passed"
-    )
-    failed_filters: List[str] = Field(
+    passed: bool = Field(description="Whether all hard filters passed")
+    failed_filters: list[str] = Field(
         description="List of filters that failed",
         default_factory=list,
     )
@@ -126,15 +124,15 @@ class FollowUpAnalysisResult(BaseModel):
         description="Whether the system can safely auto-respond to this follow-up",
         default=False,
     )
-    question_type: Optional[str] = Field(
+    question_type: str | None = Field(
         description="Type of question detected: SALARY, AVAILABILITY, TECH_STACK, EXPERIENCE, INTEREST, NONE, OTHER",
         default=None,
     )
-    detected_question: Optional[str] = Field(
+    detected_question: str | None = Field(
         description="The specific question detected in the message",
         default=None,
     )
-    suggested_response: Optional[str] = Field(
+    suggested_response: str | None = Field(
         description="If auto-respond is possible, the suggested response based on profile",
         default=None,
     )
@@ -148,7 +146,9 @@ class FollowUpAnalysisResult(BaseModel):
     )
 
     @classmethod
-    def manual_review(cls, reasoning: str = "Follow-up requires manual review") -> "FollowUpAnalysisResult":
+    def manual_review(
+        cls, reasoning: str = "Follow-up requires manual review"
+    ) -> "FollowUpAnalysisResult":
         """Factory for when manual review is needed."""
         return cls(
             can_auto_respond=False,
@@ -167,15 +167,15 @@ class ExtractedData(BaseModel):
         description="Seniority level",
         default="Unknown",
     )
-    tech_stack: List[str] = Field(
+    tech_stack: list[str] = Field(
         description="List of technologies",
         default_factory=list,
     )
-    salary_min: Optional[int] = Field(
+    salary_min: int | None = Field(
         description="Minimum salary in USD",
         default=None,
     )
-    salary_max: Optional[int] = Field(
+    salary_max: int | None = Field(
         description="Maximum salary in USD",
         default=None,
     )
@@ -252,12 +252,7 @@ class ScoringResult(BaseModel):
     @property
     def total_score(self) -> int:
         """Calculate total score (0-100)."""
-        return (
-            self.tech_stack_score
-            + self.salary_score
-            + self.seniority_score
-            + self.company_score
-        )
+        return self.tech_stack_score + self.salary_score + self.seniority_score + self.company_score
 
     @property
     def tier(self) -> str:
@@ -279,7 +274,7 @@ class CandidateProfile(BaseModel):
     name: str = Field(description="Candidate's name")
 
     # Skills and experience
-    preferred_technologies: List[str] = Field(
+    preferred_technologies: list[str] = Field(
         description="Technologies the candidate prefers to work with",
         default_factory=list,
     )
@@ -296,7 +291,7 @@ class CandidateProfile(BaseModel):
         description="Minimum acceptable salary in USD",
         ge=0,
     )
-    ideal_salary_usd: Optional[int] = Field(
+    ideal_salary_usd: int | None = Field(
         description="Ideal salary in USD",
         default=None,
     )
@@ -310,17 +305,17 @@ class CandidateProfile(BaseModel):
         description="Preferred work week: 4-days, 5-days, or flexible",
         default="5-days",
     )
-    preferred_locations: List[str] = Field(
+    preferred_locations: list[str] = Field(
         description="Preferred work locations",
         default_factory=list,
     )
 
     # Company preferences
-    preferred_company_size: Optional[str] = Field(
+    preferred_company_size: str | None = Field(
         description="Preferred company size: Startup, Mid-size, Enterprise",
         default=None,
     )
-    industry_preferences: List[str] = Field(
+    industry_preferences: list[str] = Field(
         description="Preferred industries",
         default_factory=list,
     )
@@ -334,7 +329,7 @@ class CandidateProfile(BaseModel):
         description="Whether actively looking for new opportunities",
         default=True,
     )
-    notes: Optional[str] = Field(
+    notes: str | None = Field(
         description="Additional notes or context",
         default=None,
     )
@@ -348,13 +343,13 @@ class OpportunityResult(BaseModel):
     raw_message: str
 
     # Conversation state analysis
-    conversation_state: Optional[ConversationStateResult] = Field(
+    conversation_state: ConversationStateResult | None = Field(
         description="Result of conversation state analysis",
         default=None,
     )
 
     # Follow-up analysis (only populated for FOLLOW_UP state)
-    follow_up_analysis: Optional[FollowUpAnalysisResult] = Field(
+    follow_up_analysis: FollowUpAnalysisResult | None = Field(
         description="Analysis of follow-up message for auto-response capability",
         default=None,
     )
@@ -363,7 +358,7 @@ class OpportunityResult(BaseModel):
     extracted: ExtractedData
 
     # Hard filter validation
-    hard_filter_result: Optional[HardFilterResult] = Field(
+    hard_filter_result: HardFilterResult | None = Field(
         description="Result of hard filter validation",
         default=None,
     )
@@ -375,17 +370,17 @@ class OpportunityResult(BaseModel):
     ai_response: str
 
     # Metadata
-    processing_time_ms: Optional[int] = None
+    processing_time_ms: int | None = None
     status: str = "processed"  # processed, ignored, declined, manual_review, auto_responded
     requires_manual_review: bool = Field(
         description="Whether this message needs manual human review",
         default=False,
     )
-    manual_review_reason: Optional[str] = Field(
+    manual_review_reason: str | None = Field(
         description="Reason why manual review is required",
         default=None,
     )
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def to_db_dict(self) -> dict:
         """
@@ -440,7 +435,9 @@ class OpportunityResult(BaseModel):
             # Response
             "ai_response": self.ai_response,
             # Conversation classification
-            "conversation_state": self.conversation_state.state.value if self.conversation_state else None,
+            "conversation_state": (
+                self.conversation_state.state.value if self.conversation_state else None
+            ),
             "processing_status": self.status,
             # Manual review
             "requires_manual_review": self.requires_manual_review,

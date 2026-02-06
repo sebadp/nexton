@@ -5,8 +5,6 @@ This module provides standardized cache key generation for consistent
 caching across the application.
 """
 
-from typing import Optional
-
 
 class CacheKeys:
     """Cache key constants and generators."""
@@ -42,7 +40,7 @@ class CacheKeys:
     @classmethod
     def opportunity_list(
         cls,
-        tier: Optional[str] = None,
+        tier: str | None = None,
         skip: int = 0,
         limit: int = 10,
         sort_by: str = "created_at",

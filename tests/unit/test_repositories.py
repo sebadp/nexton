@@ -1,7 +1,7 @@
 """
 Unit tests for repository layer.
 """
-import pytest
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Opportunity
@@ -24,9 +24,7 @@ class TestOpportunityRepository:
         assert opportunity.company == sample_opportunity_data["company"]
         assert opportunity.total_score == sample_opportunity_data["total_score"]
 
-    async def test_get_by_id(
-        self, db_session: AsyncSession, sample_opportunity: Opportunity
-    ):
+    async def test_get_by_id(self, db_session: AsyncSession, sample_opportunity: Opportunity):
         """Test getting opportunity by ID."""
         repo = OpportunityRepository(db_session)
 
@@ -44,9 +42,7 @@ class TestOpportunityRepository:
 
         assert opportunity is None
 
-    async def test_get_all(
-        self, db_session: AsyncSession, sample_opportunity: Opportunity
-    ):
+    async def test_get_all(self, db_session: AsyncSession, sample_opportunity: Opportunity):
         """Test listing opportunities."""
         repo = OpportunityRepository(db_session)
 
@@ -125,9 +121,7 @@ class TestOpportunityRepository:
         deleted = await repo.delete(999999)
         assert deleted is False
 
-    async def test_count(
-        self, db_session: AsyncSession, sample_opportunity: Opportunity
-    ):
+    async def test_count(self, db_session: AsyncSession, sample_opportunity: Opportunity):
         """Test counting opportunities."""
         repo = OpportunityRepository(db_session)
 
@@ -138,9 +132,7 @@ class TestOpportunityRepository:
         count_filtered = await repo.count(tier="HIGH_PRIORITY")
         assert count_filtered >= 1
 
-    async def test_get_stats(
-        self, db_session: AsyncSession, sample_opportunity: Opportunity
-    ):
+    async def test_get_stats(self, db_session: AsyncSession, sample_opportunity: Opportunity):
         """Test getting statistics."""
         repo = OpportunityRepository(db_session)
 

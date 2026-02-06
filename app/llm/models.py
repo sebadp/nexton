@@ -3,7 +3,6 @@ Data models for LLM responses and usage tracking.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -14,10 +13,7 @@ class LLMUsage:
     completion_tokens: int
     total_tokens: int
 
-    @property
-    def cost_usd(self) -> float:
-        """Calculate cost (to be overridden by provider)."""
-        return 0.0
+    cost_usd: float = 0.0
 
 
 @dataclass
@@ -27,9 +23,9 @@ class LLMResponse:
     content: str
     model: str
     provider: str
-    usage: Optional[LLMUsage] = None
-    finish_reason: Optional[str] = None
-    raw_response: Optional[dict] = None
+    usage: LLMUsage | None = None
+    finish_reason: str | None = None
+    raw_response: dict | None = None
 
     @property
     def cost_usd(self) -> float:

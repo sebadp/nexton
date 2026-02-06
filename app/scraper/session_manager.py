@@ -7,9 +7,9 @@ Handles browser sessions, cookie persistence, and authentication state.
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
 
 from app.core.exceptions import ScraperError
 from app.core.logging import get_logger
@@ -30,9 +30,9 @@ class SessionManager:
 
     def __init__(
         self,
-        cookies_path: Optional[Path] = None,
+        cookies_path: Path | None = None,
         headless: bool = True,
-        user_agent: Optional[str] = None,
+        user_agent: str | None = None,
     ):
         """
         Initialize session manager.
@@ -46,10 +46,10 @@ class SessionManager:
         self.headless = headless
         self.user_agent = user_agent or self._get_default_user_agent()
 
-        self._playwright = None
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
+        self._playwright: Playwright | None = None
+        self._browser: Browser | None = None
+        self._context: BrowserContext | None = None
+        self._page: Page | None = None
 
         # Ensure cookies directory exists
         self.cookies_path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +81,7 @@ class SessionManager:
 
             # Start Playwright
             self._playwright = await async_playwright().start()
+            assert self._playwright
 
             # Launch browser
             self._browser = await self._playwright.chromium.launch(
@@ -92,27 +93,24 @@ class SessionManager:
                 ],
             )
 
-            # Create context with saved cookies if available
-            context_options = {
-                "user_agent": self.user_agent,
-                "viewport": {"width": 1920, "height": 1080},
-                "locale": "es-ES",
-                "timezone_id": "America/Mexico_City",
-            }
-
             # Load cookies if they exist
+            storage_state: Any = None
             if self.cookies_path.exists():
                 try:
                     cookies = self._load_cookies()
                     if cookies:
-                        context_options["storage_state"] = {"cookies": cookies}
-                        logger.info(
-                            "cookies_loaded", cookie_count=len(cookies)
-                        )
+                        storage_state = {"cookies": cookies}
+                        logger.info("cookies_loaded", cookie_count=len(cookies))
                 except Exception as e:
                     logger.warning("failed_to_load_cookies", error=str(e))
 
-            self._context = await self._browser.new_context(**context_options)
+            self._context = await self._browser.new_context(
+                user_agent=self.user_agent,
+                viewport={"width": 1920, "height": 1080},
+                locale="es-ES",
+                timezone_id="America/Mexico_City",
+                storage_state=storage_state,
+            )
 
             # Create initial page
             self._page = await self._context.new_page()
@@ -130,9 +128,7 @@ class SessionManager:
         except Exception as e:
             logger.error("failed_to_start_browser", error=str(e))
             await self.close()
-            raise ScraperError(
-                message="Failed to start browser", details={"error": str(e)}
-            ) from e
+            raise ScraperError(message="Failed to start browser", details={"error": str(e)}) from e
 
     async def close(self) -> None:
         """Close the browser and cleanup resources."""
@@ -214,11 +210,9 @@ class SessionManager:
 
         except Exception as e:
             logger.error("failed_to_save_cookies", error=str(e))
-            raise ScraperError(
-                message="Failed to save cookies", details={"error": str(e)}
-            ) from e
+            raise ScraperError(message="Failed to save cookies", details={"error": str(e)}) from e
 
-    def _load_cookies(self) -> List[Dict]:
+    def _load_cookies(self) -> list[dict]:
         """
         Load cookies from disk.
 
@@ -229,7 +223,7 @@ class SessionManager:
             ScraperError: If failed to load cookies
         """
         try:
-            with open(self.cookies_path, "r") as f:
+            with open(self.cookies_path) as f:
                 data = json.load(f)
 
             # Check if cookies are not too old (30 days)
@@ -244,7 +238,7 @@ class SessionManager:
                 return []
 
             cookies = data.get("cookies", [])
-            return cookies
+            return list(cookies)
 
         except FileNotFoundError:
             logger.info("no_cookies_file_found")
@@ -308,7 +302,9 @@ class SessionManager:
             logger.info("attempting_login", email=email)
 
             # Navigate to login page (increased timeout for slow connections)
-            await page.goto("https://www.linkedin.com/login", wait_until="networkidle", timeout=60000)
+            await page.goto(
+                "https://www.linkedin.com/login", wait_until="networkidle", timeout=60000
+            )
 
             # Fill in credentials
             await page.fill('input[id="username"]', email)

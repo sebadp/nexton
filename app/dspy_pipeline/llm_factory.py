@@ -5,6 +5,7 @@ Creates LLM instances based on configuration (Ollama, OpenAI, Anthropic).
 """
 
 import dspy
+
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -53,8 +54,7 @@ def get_llm(
         return _get_anthropic_llm(model, max_tokens, temperature)
     else:
         raise ValueError(
-            f"Unsupported LLM provider: {provider}. "
-            f"Supported providers: ollama, openai, anthropic"
+            f"Unsupported LLM provider: {provider}. Supported providers: ollama, openai, anthropic"
         )
 
 
@@ -87,9 +87,7 @@ def _get_ollama_llm(model: str, max_tokens: int, temperature: float) -> dspy.LM:
 def _get_openai_llm(model: str, max_tokens: int, temperature: float) -> dspy.LM:
     """Get OpenAI LLM instance."""
     if not settings.OPENAI_API_KEY:
-        raise ValueError(
-            "OPENAI_API_KEY not set. Please set it in .env or environment."
-        )
+        raise ValueError("OPENAI_API_KEY not set. Please set it in .env or environment.")
 
     lm = dspy.LM(
         model=f"openai/{model}",
@@ -105,9 +103,7 @@ def _get_openai_llm(model: str, max_tokens: int, temperature: float) -> dspy.LM:
 def _get_anthropic_llm(model: str, max_tokens: int, temperature: float) -> dspy.LM:
     """Get Anthropic LLM instance."""
     if not settings.ANTHROPIC_API_KEY:
-        raise ValueError(
-            "ANTHROPIC_API_KEY not set. Please set it in .env or environment."
-        )
+        raise ValueError("ANTHROPIC_API_KEY not set. Please set it in .env or environment.")
 
     lm = dspy.LM(
         model=f"anthropic/{model}",

@@ -4,6 +4,7 @@ DSPy Signatures - Define input/output types for LLM modules.
 Signatures describe what the LLM should do and what format
 it should return data in.
 """
+
 import dspy
 
 
@@ -20,9 +21,7 @@ class ConversationStateSignature(dspy.Signature):
     """
 
     # Input
-    message: str = dspy.InputField(
-        desc="Raw LinkedIn message from recruiter"
-    )
+    message: str = dspy.InputField(desc="Raw LinkedIn message from recruiter")
 
     # Outputs
     conversation_state: str = dspy.OutputField(
@@ -35,9 +34,7 @@ class ConversationStateSignature(dspy.Signature):
         A message saying just "Ok" or "Gracias" is NEVER a new opportunity, even if it's about a job conversation."""
     )
 
-    confidence: str = dspy.OutputField(
-        desc="Confidence level: HIGH, MEDIUM, or LOW"
-    )
+    confidence: str = dspy.OutputField(desc="Confidence level: HIGH, MEDIUM, or LOW")
 
     reasoning: str = dspy.OutputField(
         desc="Brief explanation of why this classification was chosen"
@@ -58,9 +55,7 @@ class FollowUpAnalysisSignature(dspy.Signature):
     """
 
     # Input
-    message: str = dspy.InputField(
-        desc="The follow-up message from recruiter"
-    )
+    message: str = dspy.InputField(desc="The follow-up message from recruiter")
     candidate_profile_summary: str = dspy.InputField(
         desc="Summary of candidate's profile including: salary expectations, experience, preferred technologies, availability, etc."
     )
@@ -99,9 +94,7 @@ class FollowUpAnalysisSignature(dspy.Signature):
         desc="YES if answering the message properly requires knowledge of previous conversation that we don't have. NO if it can be answered standalone."
     )
 
-    reasoning: str = dspy.OutputField(
-        desc="Brief explanation of the decision"
-    )
+    reasoning: str = dspy.OutputField(desc="Brief explanation of the decision")
 
 
 class MessageAnalysisSignature(dspy.Signature):
@@ -113,17 +106,11 @@ class MessageAnalysisSignature(dspy.Signature):
     """
 
     # Input
-    message: str = dspy.InputField(
-        desc="Raw LinkedIn message from recruiter"
-    )
+    message: str = dspy.InputField(desc="Raw LinkedIn message from recruiter")
 
     # Outputs
-    company: str = dspy.OutputField(
-        desc="Company name mentioned in the message"
-    )
-    role: str = dspy.OutputField(
-        desc="Job role/title mentioned (e.g., 'Senior Backend Engineer')"
-    )
+    company: str = dspy.OutputField(desc="Company name mentioned in the message")
+    role: str = dspy.OutputField(desc="Job role/title mentioned (e.g., 'Senior Backend Engineer')")
     seniority: str = dspy.OutputField(
         desc="Seniority level: Junior, Mid, Senior, Staff, Principal, or Unknown"
     )
@@ -136,9 +123,7 @@ class MessageAnalysisSignature(dspy.Signature):
     remote_policy: str = dspy.OutputField(
         desc="Remote work policy: Remote, Hybrid, Onsite, or Unknown"
     )
-    location: str = dspy.OutputField(
-        desc="Job location if mentioned, or 'Not specified'"
-    )
+    location: str = dspy.OutputField(desc="Job location if mentioned, or 'Not specified'")
 
 
 class ScoringSignature(dspy.Signature):
@@ -160,30 +145,22 @@ class ScoringSignature(dspy.Signature):
     tech_stack_score: int = dspy.OutputField(
         desc="Tech stack match score (0-40 points). 40 = perfect match, 0 = no match"
     )
-    tech_stack_reasoning: str = dspy.OutputField(
-        desc="Brief explanation of tech stack score"
-    )
+    tech_stack_reasoning: str = dspy.OutputField(desc="Brief explanation of tech stack score")
 
     salary_score: int = dspy.OutputField(
         desc="Salary adequacy score (0-30 points). 30 = excellent, 0 = too low"
     )
-    salary_reasoning: str = dspy.OutputField(
-        desc="Brief explanation of salary score"
-    )
+    salary_reasoning: str = dspy.OutputField(desc="Brief explanation of salary score")
 
     seniority_score: int = dspy.OutputField(
         desc="Seniority match score (0-20 points). 20 = perfect fit, 0 = mismatch"
     )
-    seniority_reasoning: str = dspy.OutputField(
-        desc="Brief explanation of seniority score"
-    )
+    seniority_reasoning: str = dspy.OutputField(desc="Brief explanation of seniority score")
 
     company_score: int = dspy.OutputField(
         desc="Company attractiveness score (0-10 points). 10 = top company, 0 = unknown"
     )
-    company_reasoning: str = dspy.OutputField(
-        desc="Brief explanation of company score"
-    )
+    company_reasoning: str = dspy.OutputField(desc="Brief explanation of company score")
 
 
 class ResponseGenerationSignature(dspy.Signature):
@@ -198,30 +175,16 @@ class ResponseGenerationSignature(dspy.Signature):
     """
 
     # Inputs
-    recruiter_name: str = dspy.InputField(
-        desc="Recruiter's name"
-    )
-    company: str = dspy.InputField(
-        desc="Company name"
-    )
-    role: str = dspy.InputField(
-        desc="Job role"
-    )
-    total_score: int = dspy.InputField(
-        desc="Total opportunity score (0-100)"
-    )
+    recruiter_name: str = dspy.InputField(desc="Recruiter's name")
+    company: str = dspy.InputField(desc="Company name")
+    role: str = dspy.InputField(desc="Job role")
+    total_score: int = dspy.InputField(desc="Total opportunity score (0-100)")
     tier: str = dspy.InputField(
         desc="Opportunity tier: HIGH_PRIORITY, INTERESANTE, POCO_INTERESANTE, NO_INTERESA"
     )
-    salary_range: str = dspy.InputField(
-        desc="Salary range if mentioned"
-    )
-    tech_stack: str = dspy.InputField(
-        desc="Technologies mentioned"
-    )
-    candidate_name: str = dspy.InputField(
-        desc="Candidate's name"
-    )
+    salary_range: str = dspy.InputField(desc="Salary range if mentioned")
+    tech_stack: str = dspy.InputField(desc="Technologies mentioned")
+    candidate_name: str = dspy.InputField(desc="Candidate's name")
     candidate_context: str = dspy.InputField(
         desc="Candidate's current professional situation, job search status, must-have requirements, and deal-breakers. Use this to personalize the response appropriately."
     )

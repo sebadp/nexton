@@ -1,6 +1,7 @@
 """
 Structured logging configuration using structlog.
 """
+
 import logging
 import sys
 from typing import Any
@@ -56,7 +57,7 @@ def setup_logging() -> None:
 
     # Configure structlog
     structlog.configure(
-        processors=processors,
+        processors=processors,  # type: ignore
         wrapper_class=structlog.make_filtering_bound_logger(
             getattr(logging, settings.LOG_LEVEL.upper())
         ),

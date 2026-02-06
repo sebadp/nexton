@@ -3,30 +3,27 @@ OpportunityPipeline - Integrates all DSPy modules into a complete workflow.
 
 This is the main entry point for processing LinkedIn recruiter messages.
 """
+
 import time
-from typing import Optional
 
 import dspy
 
 from app.core.config import settings
 from app.core.exceptions import PipelineError
 from app.core.logging import get_logger
+from app.dspy_modules.hard_filters import apply_hard_filters, get_candidate_status_from_profile
 from app.dspy_modules.message_analyzer import (
     ConversationStateAnalyzer,
     FollowUpAnalyzer,
     MessageAnalyzer,
 )
-from app.dspy_modules.hard_filters import apply_hard_filters, get_candidate_status_from_profile
 from app.dspy_modules.models import (
     CandidateProfile,
-    CandidateStatus,
     ConversationState,
     ConversationStateResult,
     ExtractedData,
-    FollowUpAnalysisResult,
     HardFilterResult,
     OpportunityResult,
-    ProcessingStatus,
     ScoringResult,
 )
 from app.dspy_modules.response_generator import ResponseGenerator
@@ -357,10 +354,10 @@ class OpportunityPipeline(dspy.Module):
 
 
 def configure_dspy(
-    provider_type: Optional[str] = None,
-    model_name: Optional[str] = None,
-    max_tokens: Optional[int] = None,
-    temperature: Optional[float] = None,
+    provider_type: str | None = None,
+    model_name: str | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> None:
     """
     Configure DSPy with LLM provider.
@@ -385,7 +382,7 @@ def configure_dspy(
             "model": model_name,
             "max_tokens": max_tokens,
             "temperature": temperature,
-        }
+        },
     )
 
     try:
@@ -425,13 +422,14 @@ def configure_dspy(
             extra={
                 "provider": provider_type,
                 "model": model_name,
-            }
+            },
         )
 
     except Exception as e:
         logger.error(
             "dspy_configuration_failed",
-            extra={"provider": provider_type, "model": model_name, "error": str(e)}
+            extra={"provider": provider_type, "model": model_name, "error": str(e)},
+            exc_info=True,
         )
         raise PipelineError(
             message=f"Failed to configure DSPy with {provider_type}",
@@ -440,7 +438,7 @@ def configure_dspy(
 
 
 # Singleton instance (lazy initialization)
-_pipeline_instance: Optional[OpportunityPipeline] = None
+_pipeline_instance: OpportunityPipeline | None = None
 
 
 def get_pipeline() -> OpportunityPipeline:

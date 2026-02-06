@@ -1,8 +1,8 @@
 """
 Profile loader - Load candidate profile from YAML configuration.
 """
+
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -14,7 +14,7 @@ from app.dspy_modules.models import CandidateProfile
 logger = get_logger(__name__)
 
 
-def load_profile(profile_path: Optional[str] = None) -> CandidateProfile:
+def load_profile(profile_path: str | None = None) -> CandidateProfile:
     """
     Load candidate profile from YAML file.
 
@@ -45,7 +45,7 @@ def load_profile(profile_path: Optional[str] = None) -> CandidateProfile:
             )
 
         # Load YAML
-        with open(profile_file, "r", encoding="utf-8") as f:
+        with open(profile_file, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         # Validate and create profile
@@ -76,11 +76,11 @@ def load_profile(profile_path: Optional[str] = None) -> CandidateProfile:
 
 
 # Cached profile instance
-_cached_profile: Optional[CandidateProfile] = None
-_cached_profile_dict: Optional[dict] = None
+_cached_profile: CandidateProfile | None = None
+_cached_profile_dict: dict | None = None
 
 
-def load_profile_dict(profile_path: Optional[str] = None) -> dict:
+def load_profile_dict(profile_path: str | None = None) -> dict:
     """
     Load raw profile dictionary from YAML file.
 
@@ -108,10 +108,12 @@ def load_profile_dict(profile_path: Optional[str] = None) -> dict:
             )
 
         # Load YAML
-        with open(profile_file, "r", encoding="utf-8") as f:
+        with open(profile_file, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
-        return data
+        if isinstance(data, dict):
+            return data
+        return {}
 
     except yaml.YAMLError as e:
         logger.error("profile_yaml_parse_error", error=str(e))

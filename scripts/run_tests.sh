@@ -54,7 +54,7 @@ esac
 if [ $? -eq 0 ]; then
   echo ""
   echo -e "${GREEN}✅ All tests passed!${NC}"
-  
+
   if [ "$COVERAGE" = "yes" ]; then
     echo ""
     echo "📊 Coverage report generated at htmlcov/index.html"

@@ -9,7 +9,6 @@ Usage:
 
 import argparse
 import asyncio
-from datetime import datetime
 
 from app.scraper.linkedin_scraper import LinkedInScraper, ScraperConfig
 
@@ -46,7 +45,7 @@ async def test_scraper(email: str, password: str, headless: bool = True, limit: 
         max_requests_per_minute=10,
     )
 
-    print(f"\n📋 Configuration:")
+    print("\n📋 Configuration:")
     print(f"   Email: {email}")
     print(f"   Headless: {headless}")
     print(f"   Limit: {limit} messages")
@@ -79,7 +78,7 @@ async def test_scraper(email: str, password: str, headless: bool = True, limit: 
         print(f"   Read: {sum(1 for m in messages if m.is_read)}")
 
         # Display senders
-        senders = set(m.sender_name for m in messages)
+        senders = {m.sender_name for m in messages}
         print(f"   Unique senders: {len(senders)}")
         if senders:
             print(f"   Senders: {', '.join(list(senders)[:5])}")
@@ -104,7 +103,9 @@ async def test_scraper(email: str, password: str, headless: bool = True, limit: 
     return True
 
 
-async def test_messenger(email: str, password: str, conversation_url: str, message: str, headless: bool = True):
+async def test_messenger(
+    email: str, password: str, conversation_url: str, message: str, headless: bool = True
+):
     """
     Test LinkedIn messenger (sending messages).
 
@@ -121,7 +122,7 @@ async def test_messenger(email: str, password: str, conversation_url: str, messa
     print("📤 LinkedIn Messenger Test")
     print("=" * 80)
 
-    print(f"\n📋 Configuration:")
+    print("\n📋 Configuration:")
     print(f"   Email: {email}")
     print(f"   Headless: {headless}")
     print(f"   Conversation: {conversation_url}")
@@ -136,7 +137,7 @@ async def test_messenger(email: str, password: str, conversation_url: str, messa
         print("✅ Login successful!")
 
         # Send message
-        print(f"\n📤 Sending message...")
+        print("\n📤 Sending message...")
         success = await messenger.send_message(conversation_url, message)
 
         if success:
@@ -188,7 +189,9 @@ Examples:
     scrape_parser = subparsers.add_parser("scrape", help="Test message scraping")
     scrape_parser.add_argument("--email", required=True, help="LinkedIn email")
     scrape_parser.add_argument("--password", required=True, help="LinkedIn password")
-    scrape_parser.add_argument("--headless", default="true", choices=["true", "false"], help="Run headless")
+    scrape_parser.add_argument(
+        "--headless", default="true", choices=["true", "false"], help="Run headless"
+    )
     scrape_parser.add_argument("--limit", type=int, default=5, help="Max messages to scrape")
 
     # Send command
@@ -197,7 +200,9 @@ Examples:
     send_parser.add_argument("--password", required=True, help="LinkedIn password")
     send_parser.add_argument("--url", required=True, help="Conversation URL")
     send_parser.add_argument("--message", required=True, help="Message to send")
-    send_parser.add_argument("--headless", default="true", choices=["true", "false"], help="Run headless")
+    send_parser.add_argument(
+        "--headless", default="true", choices=["true", "false"], help="Run headless"
+    )
 
     args = parser.parse_args()
 
@@ -209,7 +214,9 @@ Examples:
 
     if args.command == "scrape":
         # Test scraper
-        success = asyncio.run(test_scraper(args.email, args.password, headless=headless, limit=args.limit))
+        success = asyncio.run(
+            test_scraper(args.email, args.password, headless=headless, limit=args.limit)
+        )
         exit(0 if success else 1)
 
     elif args.command == "send":

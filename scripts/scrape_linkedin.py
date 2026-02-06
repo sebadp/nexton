@@ -63,7 +63,7 @@ async def main():
             return
 
         # Scrape unread messages
-        print(f"\n🔍 Scraping messages (max 5)...\n")
+        print("\n🔍 Scraping messages (max 5)...\n")
         messages = await scraper.scrape_messages(limit=5, unread_only=True)
 
         # Display results

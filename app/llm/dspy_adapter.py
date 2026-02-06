@@ -6,7 +6,6 @@ Wraps our LLMProvider interface to work with DSPy's expected LM interface.
 
 import asyncio
 import time
-from typing import Any, Optional
 
 import dspy
 
@@ -26,11 +25,7 @@ class DSPyLLMAdapter(dspy.LM):
     """
 
     def __init__(
-        self,
-        provider: LLMProvider,
-        max_tokens: int = 500,
-        temperature: float = 0.7,
-        **kwargs
+        self, provider: LLMProvider, max_tokens: int = 500, temperature: float = 0.7, **kwargs
     ):
         """
         Initialize DSPy adapter.
@@ -52,7 +47,7 @@ class DSPyLLMAdapter(dspy.LM):
             extra={
                 "provider": provider.provider_name,
                 "model": provider.model,
-            }
+            },
         )
 
     def __call__(self, prompt: str, **kwargs) -> list[str]:
@@ -80,6 +75,7 @@ class DSPyLLMAdapter(dspy.LM):
             # For now, we'll use run_until_complete which might not work in all cases
             # In production, DSPy should be called from sync context
             import nest_asyncio
+
             nest_asyncio.apply()
 
         start_time = time.time()
@@ -89,10 +85,7 @@ class DSPyLLMAdapter(dspy.LM):
         try:
             response = loop.run_until_complete(
                 self.provider.complete(
-                    prompt=prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    **call_kwargs
+                    prompt=prompt, temperature=temperature, max_tokens=max_tokens, **call_kwargs
                 )
             )
 
@@ -123,7 +116,7 @@ class DSPyLLMAdapter(dspy.LM):
                     "provider": self.provider.provider_name,
                     "model": self.provider.model,
                     "error": str(e),
-                }
+                },
             )
 
             # Track error
@@ -159,10 +152,7 @@ class DSPyLLMAdapter(dspy.LM):
 
         try:
             response = await self.provider.complete(
-                prompt=prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **call_kwargs
+                prompt=prompt, temperature=temperature, max_tokens=max_tokens, **call_kwargs
             )
 
             duration = time.time() - start_time
@@ -191,7 +181,7 @@ class DSPyLLMAdapter(dspy.LM):
                     "provider": self.provider.provider_name,
                     "model": self.provider.model,
                     "error": str(e),
-                }
+                },
             )
 
             # Track error
@@ -220,8 +210,10 @@ class DSPyLLMAdapter(dspy.LM):
             provider=self.provider,
             max_tokens=new_kwargs.pop("max_tokens", self.max_tokens),
             temperature=new_kwargs.pop("temperature", self.temperature),
-            **new_kwargs
+            **new_kwargs,
         )
 
     def __repr__(self) -> str:
-        return f"DSPyLLMAdapter(provider={self.provider.provider_name}, model={self.provider.model})"
+        return (
+            f"DSPyLLMAdapter(provider={self.provider.provider_name}, model={self.provider.model})"
+        )

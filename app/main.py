@@ -1,6 +1,7 @@
 """
 FastAPI application entry point.
 """
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -8,14 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# Import routers
+from app.api import v1
 from app.core.config import settings
 from app.core.exceptions import LinkedInAgentException, OpportunityNotFoundError
 from app.core.logging import get_logger
 from app.database.base import close_db, init_db
 from app.observability import setup_metrics, setup_tracing
-
-# Import routers
-from app.api import v1
 
 logger = get_logger(__name__)
 

@@ -1,9 +1,6 @@
 """
 Unit tests for configuration module.
 """
-import os
-
-import pytest
 
 from app.core.config import Settings
 
@@ -42,9 +39,7 @@ class TestSettings:
     def test_database_url_validation(self):
         """Test DATABASE_URL validation."""
         # Valid URL
-        settings = Settings(
-            DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/db"
-        )
+        settings = Settings(DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/db")
         assert "postgresql+asyncpg" in settings.DATABASE_URL
 
     def test_cors_origins_string_conversion(self):

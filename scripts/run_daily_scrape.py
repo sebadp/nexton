@@ -15,6 +15,7 @@ Usage:
     # Or via Celery CLI:
     celery -A app.tasks.celery_app call app.tasks.scraping_tasks.scrape_and_send_daily_summary
 """
+
 import sys
 from pathlib import Path
 

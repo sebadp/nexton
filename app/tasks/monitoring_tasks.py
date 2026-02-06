@@ -3,7 +3,7 @@ Celery tasks for system monitoring and health checks.
 """
 
 import asyncio
-from typing import Dict
+from typing import Any
 
 from sqlalchemy import text
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.tasks.monitoring_tasks.health_check")
-def health_check() -> Dict:
+def health_check() -> dict:
     """
     Periodic health check task.
 
@@ -29,10 +29,11 @@ def health_check() -> Dict:
     """
     logger.info("running_health_check")
 
-    health_status = {"status": "healthy", "checks": {}}
+    health_status: dict[str, Any] = {"status": "healthy", "checks": {}}
 
     # Check database
     try:
+
         async def check_db():
             async with async_session() as session:
                 await session.execute(text("SELECT 1"))

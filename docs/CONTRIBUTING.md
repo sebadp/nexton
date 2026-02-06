@@ -47,14 +47,14 @@ Feature suggestions are welcome! Please:
    ```bash
    # Run tests
    pytest tests/ -v --cov=app
-   
+
    # Format code
    black app/ tests/
    ruff check --fix app/ tests/
-   
+
    # Type checking
    mypy app/
-   
+
    # Security scan
    bandit -r app/
    ```
@@ -63,7 +63,7 @@ Feature suggestions are welcome! Please:
    ```bash
    git commit -m "feat: add amazing feature"
    ```
-   
+
    Use conventional commit format:
    - `feat:` - New feature
    - `fix:` - Bug fix
@@ -77,7 +77,7 @@ Feature suggestions are welcome! Please:
    ```bash
    git push origin feature/your-feature-name
    ```
-   
+
    Then create a Pull Request on GitHub.
 
 ## Development Setup
@@ -148,14 +148,14 @@ Use Google-style docstrings:
 ```python
 def process_message(message: str, sender: str) -> dict:
     """Process a LinkedIn message.
-    
+
     Args:
         message: The message text to process
         sender: Name of the message sender
-        
+
     Returns:
         Dictionary containing analysis results
-        
+
     Raises:
         ValueError: If message is empty
     """
@@ -191,10 +191,10 @@ def test_feature_name():
     """Test description."""
     # Arrange
     input_data = create_test_data()
-    
+
     # Act
     result = function_under_test(input_data)
-    
+
     # Assert
     assert result.status == "success"
 ```

@@ -6,8 +6,9 @@ TTL support, and cache invalidation.
 """
 
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
@@ -30,7 +31,7 @@ class RedisCache:
     TTL management, and batch operations.
     """
 
-    def __init__(self, redis_url: Optional[str] = None):
+    def __init__(self, redis_url: str | None = None):
         """
         Initialize Redis cache client.
 
@@ -38,7 +39,7 @@ class RedisCache:
             redis_url: Redis connection URL (uses settings if not provided)
         """
         self.redis_url = redis_url or settings.REDIS_URL
-        self._client: Optional[Redis] = None
+        self._client: Redis | None = None
         logger.info("redis_cache_initialized", url=self.redis_url)
 
     async def connect(self) -> None:
@@ -49,6 +50,9 @@ class RedisCache:
             CacheError: If connection fails
         """
         try:
+            if not self.redis_url:
+                raise CacheError("Redus URL not configured")
+
             self._client = await aioredis.from_url(
                 self.redis_url,
                 encoding="utf-8",
@@ -61,9 +65,7 @@ class RedisCache:
 
         except Exception as e:
             logger.error("redis_connection_failed", error=str(e))
-            raise CacheError(
-                message="Failed to connect to Redis", details={"error": str(e)}
-            ) from e
+            raise CacheError(message="Failed to connect to Redis", details={"error": str(e)}) from e
 
     async def disconnect(self) -> None:
         """Close Redis connection."""
@@ -89,7 +91,7 @@ class RedisCache:
             )
         return self._client
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """
         Get value from cache.
 
@@ -126,9 +128,7 @@ class RedisCache:
                 details={"key": key, "error": str(e)},
             ) from e
 
-    async def set(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         Set value in cache.
 
@@ -189,7 +189,7 @@ class RedisCache:
             else:
                 logger.debug("cache_key_not_found", key=key)
 
-            return deleted
+            return bool(deleted)
 
         except Exception as e:
             logger.error("cache_delete_error", key=key, error=str(e))
@@ -214,9 +214,7 @@ class RedisCache:
 
             # Use SCAN to find matching keys
             while True:
-                cursor, keys = await self.client.scan(
-                    cursor=cursor, match=pattern, count=100
-                )
+                cursor, keys = await self.client.scan(cursor=cursor, match=pattern, count=100)
 
                 if keys:
                     deleted = await self.client.delete(*keys)
@@ -247,7 +245,7 @@ class RedisCache:
         """
         try:
             result = await self.client.exists(key)
-            return result > 0
+            return bool(result > 0)
 
         except Exception as e:
             logger.error("cache_exists_error", key=key, error=str(e))
@@ -265,7 +263,7 @@ class RedisCache:
         """
         try:
             ttl = await self.client.ttl(key)
-            return ttl
+            return int(ttl)
 
         except Exception as e:
             logger.error("cache_ttl_error", key=key, error=str(e))
@@ -284,7 +282,7 @@ class RedisCache:
         """
         try:
             result = await self.client.expire(key, ttl)
-            return result
+            return bool(result)
 
         except Exception as e:
             logger.error("cache_set_ttl_error", key=key, error=str(e))
@@ -304,7 +302,7 @@ class RedisCache:
             values = await self.client.mget(keys)
 
             result = {}
-            for key, value in zip(keys, values):
+            for key, value in zip(keys, values, strict=False):
                 if value:
                     try:
                         result[key] = json.loads(value)
@@ -313,7 +311,9 @@ class RedisCache:
                 else:
                     result[key] = None
 
-            logger.debug("cache_get_many", key_count=len(keys), found=sum(1 for v in result.values() if v))
+            logger.debug(
+                "cache_get_many", key_count=len(keys), found=sum(1 for v in result.values() if v)
+            )
             return result
 
         except Exception as e:
@@ -323,7 +323,7 @@ class RedisCache:
                 details={"error": str(e)},
             ) from e
 
-    async def set_many(self, mapping: dict[str, Any], ttl: Optional[int] = None) -> bool:
+    async def set_many(self, mapping: dict[str, Any], ttl: int | None = None) -> bool:
         """
         Set multiple values at once.
 
@@ -384,7 +384,7 @@ class RedisCache:
         """
         try:
             info = await self.client.info()
-            return info
+            return dict(info)
 
         except Exception as e:
             logger.error("cache_info_error", error=str(e))
@@ -402,7 +402,7 @@ class RedisCache:
 
 
 # Global cache instance
-_cache_instance: Optional[RedisCache] = None
+_cache_instance: RedisCache | None = None
 
 
 def get_cache() -> RedisCache:
@@ -423,7 +423,7 @@ def get_cache() -> RedisCache:
 def cached(
     key_prefix: str,
     ttl: int = 300,
-    key_func: Optional[Callable[..., str]] = None,
+    key_func: Callable[..., str] | None = None,
 ):
     """
     Decorator for caching function results.
@@ -453,9 +453,7 @@ def cached(
                 cache_key = f"{key_prefix}:{key_func(*args, **kwargs)}"
             else:
                 # Use function name and args as key
-                key_parts = [str(arg) for arg in args] + [
-                    f"{k}={v}" for k, v in kwargs.items()
-                ]
+                key_parts = [str(arg) for arg in args] + [f"{k}={v}" for k, v in kwargs.items()]
                 cache_key = f"{key_prefix}:{':'.join(key_parts)}"
 
             # Try to get from cache

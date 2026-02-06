@@ -2,8 +2,9 @@
 Unit tests for observability (tracing and metrics).
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, Mock, patch
 
 from app.observability import (
     TracingContext,

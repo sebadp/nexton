@@ -7,8 +7,8 @@ Useful for understanding the code flow and data structures.
 """
 
 import asyncio
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -206,7 +206,7 @@ async def demo_workflow():
     print("=" * 80)
     await asyncio.sleep(0.5)
     print("   🤖 AI generating response...")
-    print('   Generated: "Thank you for reaching out! I\'m very interested in...')
+    print("   Generated: \"Thank you for reaching out! I'm very interested in...")
     print("   ✅ Response generated")
 
     print("\n" + "=" * 80)

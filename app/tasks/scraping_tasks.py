@@ -7,7 +7,6 @@ through the DSPy pipeline.
 
 import asyncio
 import os
-from typing import Dict, List
 
 from celery import Task
 
@@ -47,9 +46,7 @@ class ScraperTask(Task):
     max_retries=3,
     default_retry_delay=300,  # 5 minutes
 )
-def scrape_linkedin_messages(
-    self, limit: int = 10, unread_only: bool = True
-) -> Dict:
+def scrape_linkedin_messages(self, limit: int = 10, unread_only: bool = True) -> dict:
     """
     Scrape LinkedIn messages and queue them for processing.
 
@@ -86,9 +83,7 @@ def scrape_linkedin_messages(
             email=email,
             password=password,
             headless=os.getenv("SCRAPER_HEADLESS", "true").lower() == "true",
-            max_requests_per_minute=int(
-                os.getenv("SCRAPER_MAX_REQUESTS_PER_MINUTE", "10")
-            ),
+            max_requests_per_minute=int(os.getenv("SCRAPER_MAX_REQUESTS_PER_MINUTE", "10")),
             min_delay_seconds=float(os.getenv("SCRAPER_MIN_DELAY_SECONDS", "3.0")),
         )
 
@@ -96,9 +91,7 @@ def scrape_linkedin_messages(
         async def run_scraper():
             async with LinkedInScraper(config) as scraper:
                 self._scraper = scraper  # Store for cleanup
-                messages = await scraper.scrape_messages(
-                    limit=limit, unread_only=unread_only
-                )
+                messages = await scraper.scrape_messages(limit=limit, unread_only=unread_only)
                 return messages
 
         # Execute async scraper
@@ -143,12 +136,10 @@ def scrape_linkedin_messages(
         )
 
         # Retry with exponential backoff
-        raise self.retry(exc=e, countdown=60 * (2**self.request.retries))
+        raise self.retry(exc=e, countdown=60 * (2**self.request.retries)) from e
 
     except Exception as e:
-        logger.error(
-            "unexpected_scraping_error", task_id=self.request.id, error=str(e)
-        )
+        logger.error("unexpected_scraping_error", task_id=self.request.id, error=str(e))
         raise
 
 
@@ -157,7 +148,7 @@ def scrape_linkedin_messages(
     base=ScraperTask,
     bind=True,
 )
-def scrape_unread_messages(self) -> Dict:
+def scrape_unread_messages(self) -> dict:
     """
     Scrape only unread messages (utility task).
 
@@ -170,7 +161,7 @@ def scrape_unread_messages(self) -> Dict:
     logger.info("periodic_scraping_started", task_id=self.request.id)
 
     # Call main scraping task with unread_only=True
-    return scrape_linkedin_messages(limit=20, unread_only=True)
+    return dict(scrape_linkedin_messages(limit=20, unread_only=True))
 
 
 @celery_app.task(
@@ -178,7 +169,7 @@ def scrape_unread_messages(self) -> Dict:
     base=ScraperTask,
     bind=True,
 )
-def scrape_and_send_daily_summary(self) -> Dict:
+def scrape_and_send_daily_summary(self) -> dict:
     """
     Daily task: Scrape LinkedIn, process new messages, and send ONE summary email.
 
@@ -192,6 +183,7 @@ def scrape_and_send_daily_summary(self) -> Dict:
         Dictionary with summary results
     """
     import asyncio
+
     from app.database.base import AsyncSessionLocal
     from app.database.repositories import OpportunityRepository
     from app.dspy_modules.pipeline import get_pipeline
@@ -214,13 +206,12 @@ def scrape_and_send_daily_summary(self) -> Dict:
 
         # Create scraper config
         from app.scraper import LinkedInScraper, ScraperConfig
+
         config = ScraperConfig(
             email=email,
             password=password,
             headless=os.getenv("SCRAPER_HEADLESS", "true").lower() == "true",
-            max_requests_per_minute=int(
-                os.getenv("SCRAPER_MAX_REQUESTS_PER_MINUTE", "10")
-            ),
+            max_requests_per_minute=int(os.getenv("SCRAPER_MAX_REQUESTS_PER_MINUTE", "10")),
             min_delay_seconds=float(os.getenv("SCRAPER_MIN_DELAY_SECONDS", "3.0")),
         )
 
@@ -344,7 +335,7 @@ def scrape_and_send_daily_summary(self) -> Dict:
     base=ScraperTask,
     bind=True,
 )
-def get_unread_count(self) -> Dict:
+def get_unread_count(self) -> dict:
     """
     Get count of unread messages without scraping content.
 
@@ -393,7 +384,7 @@ def get_unread_count(self) -> Dict:
     name="app.tasks.scraping_tasks.mark_conversation_as_read",
     bind=True,
 )
-def mark_conversation_as_read(self, conversation_url: str) -> Dict:
+def mark_conversation_as_read(self, conversation_url: str) -> dict:
     """
     Mark a LinkedIn conversation as read.
 
@@ -453,7 +444,7 @@ def mark_conversation_as_read(self, conversation_url: str) -> Dict:
 
 # Monitoring task
 @celery_app.task(name="app.tasks.scraping_tasks.test_scraper_health")
-def test_scraper_health() -> Dict:
+def test_scraper_health() -> dict:
     """
     Test scraper health by checking login status.
 
@@ -475,7 +466,7 @@ def test_scraper_health() -> Dict:
         config = ScraperConfig(email=email, password=password, headless=True)
 
         async def check_health():
-            async with LinkedInScraper(config) as scraper:
+            async with LinkedInScraper(config) as _scraper:
                 # Just check if we can initialize
                 return True
 

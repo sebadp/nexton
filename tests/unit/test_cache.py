@@ -2,8 +2,9 @@
 Unit tests for Redis cache functionality.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.cache import CacheKeys, RedisCache, cached, generate_message_hash
 from app.core.exceptions import CacheError

@@ -4,9 +4,8 @@ Ollama LLM provider implementation.
 Supports local Ollama models (llama2, mistral, codellama, etc.).
 """
 
-from typing import Optional
-
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.logging import get_logger
 from app.llm.base import LLMProvider
@@ -18,12 +17,7 @@ logger = get_logger(__name__)
 class OllamaProvider(LLMProvider):
     """Ollama local LLM provider."""
 
-    def __init__(
-        self,
-        base_url: str = "http://localhost:11434",
-        model: str = "llama2",
-        **kwargs
-    ):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama2", **kwargs):
         """
         Initialize Ollama provider.
 
@@ -35,7 +29,7 @@ class OllamaProvider(LLMProvider):
         super().__init__(model, **kwargs)
         self.base_url = base_url.rstrip("/")
         self.client = httpx.AsyncClient(timeout=60.0)
-        logger.info(f"ollama_provider_initialized", extra={"model": model, "base_url": base_url})
+        logger.info("ollama_provider_initialized", extra={"model": model, "base_url": base_url})
 
     @property
     def provider_name(self) -> str:
@@ -51,13 +45,21 @@ class OllamaProvider(LLMProvider):
         """Ollama is free (local)."""
         return 0.0
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(
+            (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)
+        ),
+        reraise=True,
+    )
     async def complete(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion using Ollama.
@@ -78,35 +80,31 @@ class OllamaProvider(LLMProvider):
                 extra={
                     "model": self.model,
                     "temperature": temperature,
-                }
+                },
             )
+
+            # Build options
+            options = {
+                "temperature": temperature,
+            }
+            if max_tokens:
+                options["num_predict"] = max_tokens
+            options.update(kwargs)
 
             # Build request payload
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
-                "options": {
-                    "temperature": temperature,
-                }
+                "options": options,
             }
 
             # Add system prompt if provided
             if system_prompt:
                 payload["system"] = system_prompt
 
-            # Add max tokens if provided
-            if max_tokens:
-                payload["options"]["num_predict"] = max_tokens
-
-            # Add any additional options
-            payload["options"].update(kwargs)
-
             # Make request to Ollama API
-            response = await self.client.post(
-                f"{self.base_url}/api/generate",
-                json=payload
-            )
+            response = await self.client.post(f"{self.base_url}/api/generate", json=payload)
             response.raise_for_status()
 
             data = response.json()
@@ -131,7 +129,7 @@ class OllamaProvider(LLMProvider):
                 extra={
                     "model": self.model,
                     "usage": usage.__dict__ if usage else None,
-                }
+                },
             )
 
             return LLMResponse(
@@ -144,18 +142,15 @@ class OllamaProvider(LLMProvider):
             )
 
         except Exception as e:
-            logger.error(
-                "ollama_request_failed",
-                extra={"model": self.model, "error": str(e)}
-            )
+            logger.error("ollama_request_failed", extra={"model": self.model, "error": str(e)})
             raise
 
     async def chat(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion for chat messages.
@@ -176,31 +171,27 @@ class OllamaProvider(LLMProvider):
                     "model": self.model,
                     "message_count": len(messages),
                     "temperature": temperature,
-                }
+                },
             )
+
+            # Build options
+            options = {
+                "temperature": temperature,
+            }
+            if max_tokens:
+                options["num_predict"] = max_tokens
+            options.update(kwargs)
 
             # Build request payload
             payload = {
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "options": {
-                    "temperature": temperature,
-                }
+                "options": options,
             }
 
-            # Add max tokens if provided
-            if max_tokens:
-                payload["options"]["num_predict"] = max_tokens
-
-            # Add any additional options
-            payload["options"].update(kwargs)
-
             # Make request to Ollama chat API
-            response = await self.client.post(
-                f"{self.base_url}/api/chat",
-                json=payload
-            )
+            response = await self.client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
 
             data = response.json()
@@ -226,7 +217,7 @@ class OllamaProvider(LLMProvider):
                 extra={
                     "model": self.model,
                     "usage": usage.__dict__ if usage else None,
-                }
+                },
             )
 
             return LLMResponse(
@@ -239,10 +230,7 @@ class OllamaProvider(LLMProvider):
             )
 
         except Exception as e:
-            logger.error(
-                "ollama_chat_request_failed",
-                extra={"model": self.model, "error": str(e)}
-            )
+            logger.error("ollama_chat_request_failed", extra={"model": self.model, "error": str(e)})
             raise
 
     async def embed(self, text: str) -> list[float]:
@@ -257,22 +245,15 @@ class OllamaProvider(LLMProvider):
         """
         try:
             response = await self.client.post(
-                f"{self.base_url}/api/embeddings",
-                json={
-                    "model": self.model,
-                    "prompt": text
-                }
+                f"{self.base_url}/api/embeddings", json={"model": self.model, "prompt": text}
             )
             response.raise_for_status()
 
             data = response.json()
-            return data.get("embedding", [])
+            return list(data.get("embedding", []))
 
         except Exception as e:
-            logger.error(
-                "ollama_embedding_failed",
-                extra={"model": self.model, "error": str(e)}
-            )
+            logger.error("ollama_embedding_failed", extra={"model": self.model, "error": str(e)})
             raise
 
     async def __aenter__(self):

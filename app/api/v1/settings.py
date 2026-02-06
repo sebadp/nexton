@@ -1,8 +1,8 @@
 """
 Settings API endpoints for managing application configuration.
 """
+
 import os
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 class SettingsResponse(BaseModel):
     """Public settings response (sensitive data masked)."""
+
     app_name: str
     app_version: str
     env: str
@@ -32,15 +33,16 @@ class SettingsResponse(BaseModel):
 
 class UpdateSettingsRequest(BaseModel):
     """Request to update settings."""
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    llm_temperature: Optional[float] = None
-    linkedin_email: Optional[str] = None
-    linkedin_password: Optional[str] = None
-    smtp_host: Optional[str] = None
-    smtp_port: Optional[int] = None
-    notification_enabled: Optional[bool] = None
-    notification_email: Optional[str] = None
+
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_temperature: float | None = None
+    linkedin_email: str | None = None
+    linkedin_password: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    notification_enabled: bool | None = None
+    notification_email: str | None = None
 
 
 @router.get("", response_model=SettingsResponse)
@@ -110,7 +112,9 @@ async def update_settings(request: UpdateSettingsRequest) -> SettingsResponse:
             os.environ["NOTIFICATION_EMAIL"] = request.notification_email
             settings.NOTIFICATION_EMAIL = request.notification_email
 
-        return await get_settings()
+        # Cast to satisfy Mypy
+        settings_response: SettingsResponse = await get_settings()
+        return settings_response
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}") from e

@@ -1,6 +1,7 @@
 """
 FastAPI dependencies for dependency injection.
 """
+
 from typing import Annotated
 
 from fastapi import Depends

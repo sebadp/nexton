@@ -2,8 +2,9 @@
 Integration tests for Celery background tasks.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.celery_app.tasks import (
     process_opportunity_task,
@@ -53,9 +54,7 @@ class TestProcessOpportunityTask:
         mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
 
         mock_service = AsyncMock()
-        mock_service.create_opportunity = AsyncMock(
-            side_effect=Exception("Processing failed")
-        )
+        mock_service.create_opportunity = AsyncMock(side_effect=Exception("Processing failed"))
         mock_service_class.return_value = mock_service
 
         result = process_opportunity_task(
@@ -105,10 +104,12 @@ class TestScrapeLinkedInMessagesTask:
         mock_scraper = AsyncMock()
         mock_scraper.start = AsyncMock()
         mock_scraper.login = AsyncMock()
-        mock_scraper.fetch_messages = AsyncMock(return_value=[
-            {"sender": "John Doe", "message": "Test message 1"},
-            {"sender": "Jane Smith", "message": "Test message 2"},
-        ])
+        mock_scraper.fetch_messages = AsyncMock(
+            return_value=[
+                {"sender": "John Doe", "message": "Test message 1"},
+                {"sender": "Jane Smith", "message": "Test message 2"},
+            ]
+        )
         mock_scraper.close = AsyncMock()
         mock_scraper_class.return_value.__aenter__ = AsyncMock(return_value=mock_scraper)
         mock_scraper_class.return_value.__aexit__ = AsyncMock()
@@ -234,11 +235,13 @@ class TestUpdateOpportunityStatsTask:
         mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
 
         mock_service = AsyncMock()
-        mock_service.get_stats = AsyncMock(return_value={
-            "total_count": 100,
-            "by_tier": {"A": 10, "B": 30, "C": 40, "D": 20},
-            "average_score": 72.5,
-        })
+        mock_service.get_stats = AsyncMock(
+            return_value={
+                "total_count": 100,
+                "by_tier": {"A": 10, "B": 30, "C": 40, "D": 20},
+                "average_score": 72.5,
+            }
+        )
         mock_service_class.return_value = mock_service
 
         result = update_opportunity_stats_task()
@@ -320,11 +323,13 @@ class TestTaskChaining:
         # Mock successful processing
         mock_process.return_value = MagicMock(
             id="task-123",
-            get=MagicMock(return_value={
-                "success": True,
-                "opportunity_id": 1,
-                "tier": "A",
-            }),
+            get=MagicMock(
+                return_value={
+                    "success": True,
+                    "opportunity_id": 1,
+                    "tier": "A",
+                }
+            ),
         )
 
         # Simulate task chain: process -> notify if tier A
@@ -380,6 +385,7 @@ class TestTaskMonitoring:
         mock_service_class.return_value = mock_service
 
         import time
+
         start = time.time()
         process_opportunity_task("John", "Test message")
         duration = time.time() - start

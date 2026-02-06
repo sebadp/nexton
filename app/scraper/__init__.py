@@ -9,7 +9,7 @@ from app.scraper.linkedin_scraper import (
     LinkedInScraper,
     ScraperConfig,
 )
-from app.scraper.rate_limiter import AdaptiveRateLimiter, RateLimiter, RateLimitConfig
+from app.scraper.rate_limiter import AdaptiveRateLimiter, RateLimitConfig, RateLimiter
 from app.scraper.session_manager import SessionManager
 
 __all__ = [

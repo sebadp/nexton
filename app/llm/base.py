@@ -5,7 +5,6 @@ Defines the interface that all LLM providers must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from app.llm.models import LLMResponse
 
@@ -28,10 +27,10 @@ class LLMProvider(ABC):
     async def complete(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion for given prompt.
@@ -53,8 +52,8 @@ class LLMProvider(ABC):
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-        **kwargs
+        max_tokens: int | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """
         Generate completion for chat messages.

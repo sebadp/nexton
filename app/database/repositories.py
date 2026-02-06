@@ -3,8 +3,9 @@ Repository pattern for database operations.
 
 Provides abstraction layer between business logic and database.
 """
+
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Optional, Sequence
 
 from fastapi import Depends
 from sqlalchemy import func, select
@@ -113,10 +114,10 @@ class OpportunityRepository(BaseRepository):
         self,
         skip: int = 0,
         limit: int = 10,
-        tier: Optional[str] = None,
-        status: Optional[str] = None,
-        company: Optional[str] = None,
-        min_score: Optional[int] = None,
+        tier: str | None = None,
+        status: str | None = None,
+        company: str | None = None,
+        min_score: int | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
     ) -> Sequence[Opportunity]:
@@ -171,12 +172,40 @@ class OpportunityRepository(BaseRepository):
                 tier=tier,
             )
 
-            return opportunities
+            # Cast to satisfy Mypy
+            return list(opportunities)
 
         except Exception as e:
             logger.error("opportunities_get_all_failed", error=str(e))
             raise DatabaseError(
                 message="Failed to retrieve opportunities",
+                details={"error": str(e)},
+            ) from e
+
+    async def get_by_date_range(
+        self, start_date: datetime, end_date: datetime
+    ) -> Sequence[Opportunity]:
+        """
+        Get opportunities created within a date range.
+
+        Args:
+            start_date: Start datetime
+            end_date: End datetime
+
+        Returns:
+            Sequence[Opportunity]: List of opportunities
+        """
+        try:
+            query = select(Opportunity).where(
+                Opportunity.created_at >= start_date,
+                Opportunity.created_at < end_date,
+            )
+            result = await self.session.execute(query)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error("get_by_date_range_failed", error=str(e))
+            raise DatabaseError(
+                message="Failed to get opportunities by date range",
                 details={"error": str(e)},
             ) from e
 
@@ -267,10 +296,10 @@ class OpportunityRepository(BaseRepository):
 
     async def count(
         self,
-        tier: Optional[str] = None,
-        status: Optional[str] = None,
-        company: Optional[str] = None,
-        min_score: Optional[int] = None,
+        tier: str | None = None,
+        status: str | None = None,
+        company: str | None = None,
+        min_score: int | None = None,
     ) -> int:
         """
         Count opportunities with filters.
@@ -299,7 +328,7 @@ class OpportunityRepository(BaseRepository):
             result = await self.session.execute(query)
             count = result.scalar_one()
 
-            return count
+            return int(count)
 
         except Exception as e:
             logger.error("opportunity_count_failed", error=str(e))
@@ -411,7 +440,7 @@ class OpportunityRepository(BaseRepository):
             )
 
             result = await self.session.execute(query)
-            return result.scalars().all()
+            return list(result.scalars().all())
 
         except Exception as e:
             logger.error("manual_review_queue_failed", error=str(e))
@@ -432,7 +461,7 @@ class OpportunityRepository(BaseRepository):
                 Opportunity.requires_manual_review == True  # noqa: E712
             )
             result = await self.session.execute(query)
-            return result.scalar_one()
+            return int(result.scalar_one())
 
         except Exception as e:
             logger.error("manual_review_count_failed", error=str(e))
@@ -491,7 +520,7 @@ class PendingResponseRepository(BaseRepository):
                 details={"error": str(e)},
             ) from e
 
-    async def get_by_id(self, response_id: int) -> Optional[PendingResponse]:
+    async def get_by_id(self, response_id: int) -> PendingResponse | None:
         """
         Get pending response by ID.
 
@@ -514,7 +543,7 @@ class PendingResponseRepository(BaseRepository):
                 details={"error": str(e)},
             ) from e
 
-    async def get_by_opportunity_id(self, opportunity_id: int) -> Optional[PendingResponse]:
+    async def get_by_opportunity_id(self, opportunity_id: int) -> PendingResponse | None:
         """
         Get pending response by opportunity ID.
 
@@ -540,7 +569,7 @@ class PendingResponseRepository(BaseRepository):
                 details={"error": str(e)},
             ) from e
 
-    async def update(self, response_id: int, **kwargs) -> Optional[PendingResponse]:
+    async def update(self, response_id: int, **kwargs) -> PendingResponse | None:
         """
         Update pending response.
 
@@ -579,7 +608,9 @@ class PendingResponseRepository(BaseRepository):
                 details={"error": str(e)},
             ) from e
 
-    async def approve(self, response_id: int, edited_response: Optional[str] = None) -> Optional[PendingResponse]:
+    async def approve(
+        self, response_id: int, edited_response: str | None = None
+    ) -> PendingResponse | None:
         """
         Approve a pending response.
 
@@ -606,7 +637,7 @@ class PendingResponseRepository(BaseRepository):
 
         return await self.update(response_id, **updates)
 
-    async def decline(self, response_id: int) -> Optional[PendingResponse]:
+    async def decline(self, response_id: int) -> PendingResponse | None:
         """
         Decline a pending response.
 
@@ -622,7 +653,7 @@ class PendingResponseRepository(BaseRepository):
             declined_at=datetime.utcnow(),
         )
 
-    async def mark_as_sent(self, response_id: int) -> Optional[PendingResponse]:
+    async def mark_as_sent(self, response_id: int) -> PendingResponse | None:
         """
         Mark response as sent.
 
@@ -638,7 +669,7 @@ class PendingResponseRepository(BaseRepository):
             sent_at=datetime.utcnow(),
         )
 
-    async def mark_as_failed(self, response_id: int, error_message: str) -> Optional[PendingResponse]:
+    async def mark_as_failed(self, response_id: int, error_message: str) -> PendingResponse | None:
         """
         Mark response as failed.
 
@@ -679,7 +710,7 @@ class PendingResponseRepository(BaseRepository):
                 .offset(skip)
                 .limit(limit)
             )
-            return result.scalars().all()
+            return list(result.scalars().all())
 
         except Exception as e:
             logger.error("pending_response_list_failed", error=str(e))
@@ -697,11 +728,9 @@ class PendingResponseRepository(BaseRepository):
         """
         try:
             result = await self.session.execute(
-                select(func.count(PendingResponse.id)).where(
-                    PendingResponse.status == "pending"
-                )
+                select(func.count(PendingResponse.id)).where(PendingResponse.status == "pending")
             )
-            return result.scalar_one()
+            return int(result.scalar_one())
 
         except Exception as e:
             logger.error("pending_response_count_failed", error=str(e))

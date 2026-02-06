@@ -4,8 +4,6 @@ API endpoints for managing pending responses.
 Handles approve, edit, and decline operations for AI-generated responses.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +21,7 @@ router = APIRouter(prefix="/responses", tags=["responses"])
 class ResponseApproveRequest(BaseModel):
     """Request to approve a response."""
 
-    edited_response: Optional[str] = None
+    edited_response: str | None = None
 
 
 class ResponseDeclineRequest(BaseModel):
@@ -38,13 +36,13 @@ class ResponseData(BaseModel):
     id: int
     opportunity_id: int
     original_response: str
-    edited_response: Optional[str] = None
-    final_response: Optional[str] = None
+    edited_response: str | None = None
+    final_response: str | None = None
     status: str
-    approved_at: Optional[str] = None
-    declined_at: Optional[str] = None
-    sent_at: Optional[str] = None
-    error_message: Optional[str] = None
+    approved_at: str | None = None
+    declined_at: str | None = None
+    sent_at: str | None = None
+    error_message: str | None = None
     send_attempts: int
     created_at: str
     updated_at: str
@@ -59,10 +57,12 @@ class ResponseListResponse(BaseModel):
     limit: int
 
 
-@router.post("/{opportunity_id}/approve", response_model=ResponseData, status_code=status.HTTP_200_OK)
+@router.post(
+    "/{opportunity_id}/approve", response_model=ResponseData, status_code=status.HTTP_200_OK
+)
 async def approve_response(
     opportunity_id: int,
-    request: Optional[ResponseApproveRequest] = None,
+    request: ResponseApproveRequest | None = None,
     db: AsyncSession = Depends(get_db),
     repository: PendingResponseRepository = Depends(get_pending_response_repository),
 ):
@@ -104,7 +104,9 @@ async def approve_response(
 
         # Approve the response
         edited_text = request.edited_response if request else None
-        updated_response = await repository.approve(pending_response.id, edited_response=edited_text)
+        updated_response = await repository.approve(
+            pending_response.id, edited_response=edited_text
+        )
 
         if not updated_response:
             raise HTTPException(
@@ -185,7 +187,9 @@ async def edit_response(
     return await approve_response(opportunity_id, request, db, repository)
 
 
-@router.post("/{opportunity_id}/decline", response_model=ResponseData, status_code=status.HTTP_200_OK)
+@router.post(
+    "/{opportunity_id}/decline", response_model=ResponseData, status_code=status.HTTP_200_OK
+)
 async def decline_response(
     opportunity_id: int,
     db: AsyncSession = Depends(get_db),
@@ -236,7 +240,9 @@ async def decline_response(
 
         await db.commit()
 
-        logger.info("response_declined", response_id=updated_response.id, opportunity_id=opportunity_id)
+        logger.info(
+            "response_declined", response_id=updated_response.id, opportunity_id=opportunity_id
+        )
 
         return ResponseData(**updated_response.to_dict())
 

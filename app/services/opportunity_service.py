@@ -5,8 +5,8 @@ Business logic for opportunity management, integrating DSPy pipeline,
 caching, and database operations.
 """
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from app.core.exceptions import OpportunityNotFoundError, PipelineError
 from app.core.logging import get_logger
 from app.database.models import Opportunity
 from app.database.repositories import OpportunityRepository, PendingResponseRepository
-from app.dspy_modules.models import CandidateProfile, OpportunityResult
+from app.dspy_modules.models import OpportunityResult
 from app.dspy_modules.pipeline import get_pipeline
 from app.dspy_modules.profile_loader import get_profile
 from app.observability import (
@@ -41,7 +41,7 @@ class OpportunityService:
     def __init__(
         self,
         db: AsyncSession,
-        cache: Optional[RedisCache] = None,
+        cache: RedisCache | None = None,
     ):
         """
         Initialize opportunity service.
@@ -98,7 +98,7 @@ class OpportunityService:
             message_hash = generate_message_hash(raw_message)
             cache_key = CacheKeys.pipeline_result(message_hash)
 
-            pipeline_result: Optional[OpportunityResult] = None
+            pipeline_result: OpportunityResult | None = None
 
             # Try to get from cache
             if use_cache:
@@ -198,8 +198,8 @@ class OpportunityService:
                 add_span_event("opportunity_created", {"opportunity_id": opportunity.id})
 
             # Track opportunity metrics
-            track_opportunity_created(tier=opportunity.tier, status=opportunity.status)
-            track_opportunity_score(float(opportunity.total_score))
+            track_opportunity_created(tier=opportunity.tier or "Unknown", status=opportunity.status)
+            track_opportunity_score(float(opportunity.total_score or 0))
             track_opportunity_processing_time(processing_time_ms / 1000.0)
 
             # Cache the opportunity
@@ -338,10 +338,10 @@ class OpportunityService:
         self,
         skip: int = 0,
         limit: int = 10,
-        tier: Optional[str] = None,
-        status: Optional[str] = None,
-        min_score: Optional[int] = None,
-        company: Optional[str] = None,
+        tier: str | None = None,
+        status: str | None = None,
+        min_score: int | None = None,
+        company: str | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
         use_cache: bool = True,
@@ -437,7 +437,9 @@ class OpportunityService:
         Raises:
             OpportunityNotFoundError: If not found
         """
-        logger.info("updating_opportunity", opportunity_id=opportunity_id, updates=list(updates.keys()))
+        logger.info(
+            "updating_opportunity", opportunity_id=opportunity_id, updates=list(updates.keys())
+        )
 
         opportunity = await self.repository.update(opportunity_id, **updates)
 
@@ -476,13 +478,9 @@ class OpportunityService:
         """
         logger.info("deleting_opportunity", opportunity_id=opportunity_id)
 
-        deleted = await self.repository.delete(opportunity_id)
-
-        if not deleted:
-            raise OpportunityNotFoundError(
-                message=f"Opportunity {opportunity_id} not found",
-                details={"opportunity_id": opportunity_id},
-            )
+        await self.repository.delete(opportunity_id)
+        # Note: repository.delete returns None on success, raises error on failure
+        # We assume success if no error raised
 
         await self.db.commit()
 
@@ -498,7 +496,7 @@ class OpportunityService:
 
         return True
 
-    async def get_stats(self, use_cache: bool = True) -> Dict:
+    async def get_stats(self, use_cache: bool = True) -> dict:
         """
         Get opportunity statistics.
 
@@ -518,18 +516,17 @@ class OpportunityService:
 
                 if cached:
                     logger.debug("stats_from_cache")
-                    return cached
+                    return dict(cached)
             except Exception as e:
                 logger.warning("cache_get_failed", error=str(e))
 
         # Calculate stats
         total_count = await self.repository.count()
-        by_tier = await self.repository.count_by_tier()
         stats_data = await self.repository.get_stats()
 
         stats = {
             "total_count": total_count,
-            "by_tier": dict(by_tier),
+            "by_tier": stats_data.get("by_tier", {}),
             "average_score": stats_data.get("avg_score", 0),
             "highest_score": stats_data.get("max_score", 0),
             "lowest_score": stats_data.get("min_score", 0),
@@ -560,7 +557,7 @@ class OpportunityService:
             logger.warning("cache_invalidation_failed", error=str(e))
 
     @staticmethod
-    def _opportunity_to_dict(opportunity: Opportunity) -> Dict:
+    def _opportunity_to_dict(opportunity: Opportunity) -> dict:
         """Convert opportunity model to dictionary for caching."""
         return {
             "id": opportunity.id,
