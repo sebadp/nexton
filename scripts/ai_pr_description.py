@@ -55,16 +55,32 @@ def get_pr_diff(pr: PullRequest) -> str:
 
 def configure_llm():
     """Configure DSPy with the environment's LLM provider."""
+    # Prioritize Gemini if key is present, or check LLM_PROVIDER
     gemini_key = os.getenv("GEMINI_API_KEY")
     provider = os.getenv("LLM_PROVIDER", settings.LLM_PROVIDER)
     model = os.getenv("LLM_MODEL", settings.LLM_MODEL)
 
-    if gemini_key:
-        # Configure Gemini
-        print(f"Configuring AI Describer with Gemini ({model or 'gemini-2.0-flash'})")
+    # Determine which provider to use
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
 
-        # Use dspy.LM for unified interface
-        final_model_name = model or "gemini-2.0-flash"
+    use_gemini = False
+    if provider == "gemini" and gemini_key:
+        use_gemini = True
+    elif gemini_key and not has_openai:
+        use_gemini = True
+    elif gemini_key and provider not in ["openai", "anthropic"]:
+        # If provider is unset or unknown, and we have a gemini key, prefer it
+        use_gemini = True
+
+    if use_gemini:
+        # Sanitize model: if it looks like a GPT model or is missing, default to a safe Gemini model
+        target_model = model
+        if not target_model or target_model.startswith("gpt") or "gemini" not in target_model:
+            target_model = "models/gemini-2.0-flash"
+
+        print(f"Configuring AI Describer with Gemini ({target_model})")
+
+        final_model_name = target_model
         if not final_model_name.startswith("gemini/") and "gemini" in final_model_name:
             final_model_name = "gemini/" + final_model_name.replace("models/", "")
 
@@ -72,10 +88,11 @@ def configure_llm():
         dspy.settings.configure(lm=lm)
         return
 
+    # Fallback to other providers
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
 
     if not api_key:
-        print("Warning: No API Key found")
+        print("Warning: No API Key found for AI Describer")
 
     print(f"Configuring AI Describer with {provider}/{model}")
 
