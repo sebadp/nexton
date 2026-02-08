@@ -774,53 +774,59 @@ class LinkedInScraper:
             # --- UPDATED LOGIC: Fetch Full Conversation History ---
             # To capture company names and context from earlier messages
 
-            # 1. Find all message elements in the conversation
-            all_messages = await page.query_selector_all('li[class*="msg-s-message-list__event"]')
-
             conversation_transcript = []
-
-            # Limit to last 20 messages to avoid overload, but usually conversations are short
-            start_index = max(0, len(all_messages) - 20)
-
-            for i in range(start_index, len(all_messages)):
-                msg_elem = all_messages[i]
-
-                # Determine sender for this specific message
-                # Check for "msg-s-message-list__event--orb-send-enabled" (usually user)
-                # or "msg-s-event-listitem--other" (recruiter)
-                class_attr = await msg_elem.get_attribute("class")
-                is_me = "msg-s-event-listitem--other" not in (class_attr or "")
-
-                sender_label = "Candidate" if is_me else "Recruiter"
-
-                # Extract text for this message
-                msg_text = ""
-                for selector in message_text_selectors:
-                    text_elem = await msg_elem.query_selector(selector)
-                    if text_elem:
-                        msg_text = await text_elem.inner_text()
-                        break
-
-                if not msg_text:
-                    # Fallback
-                    msg_text = await msg_elem.inner_text()
-                    # Clean up metadata from fallback text if needed (timestamps etc)
-                    # For now raw text is better than nothing
-
-                # Clean text
-                msg_text = msg_text.strip()
-                if msg_text:
-                    conversation_transcript.append(f"[{sender_label}]: {msg_text}")
-
-            # Join transcript
-            if conversation_transcript:
-                message_text = "\n\n".join(conversation_transcript)
-                logger.info(
-                    "conversation_transcript_built", message_count=len(conversation_transcript)
+            try:
+                # 1. Find all message elements in the conversation
+                all_messages = await page.query_selector_all(
+                    'li[class*="msg-s-message-list__event"]'
                 )
-            else:
-                # Fallback to single message extraction if list is empty (shouldn't happen if last_message exists)
-                logger.warning("failed_to_build_transcript_falling_back")
+
+                # Limit to last 20 messages to avoid overload, but usually conversations are short
+                start_index = max(0, len(all_messages) - 20)
+
+                for i in range(start_index, len(all_messages)):
+                    msg_elem = all_messages[i]
+
+                    # Determine sender for this specific message
+                    # Check for "msg-s-message-list__event--orb-send-enabled" (usually user)
+                    # or "msg-s-event-listitem--other" (recruiter)
+                    class_attr = await msg_elem.get_attribute("class")
+                    is_me = "msg-s-event-listitem--other" not in (class_attr or "")
+
+                    sender_label = "Candidate" if is_me else "Recruiter"
+
+                    # Extract text for this message
+                    msg_text = ""
+                    for selector in message_text_selectors:
+                        text_elem = await msg_elem.query_selector(selector)
+                        if text_elem:
+                            msg_text = await text_elem.inner_text()
+                            break
+
+                    if not msg_text:
+                        # Fallback
+                        msg_text = await msg_elem.inner_text()
+                        # Clean up metadata from fallback text if needed (timestamps etc)
+                        # For now raw text is better than nothing
+
+                    # Clean text
+                    msg_text = msg_text.strip()
+                    if msg_text:
+                        conversation_transcript.append(f"[{sender_label}]: {msg_text}")
+
+                if conversation_transcript:
+                    message_text = "\n\n".join(conversation_transcript)
+                    logger.info(
+                        "conversation_transcript_built", message_count=len(conversation_transcript)
+                    )
+
+            except Exception as transcript_err:
+                logger.error("transcript_extraction_failed", error=str(transcript_err))
+                conversation_transcript = []  # Force fallback
+
+            # Fallback to single message extraction if transcript failed or is empty
+            if not conversation_transcript:
+                logger.warning("using_fallback_message_extraction")
                 message_text = ""
                 for selector in message_text_selectors:
                     message_element = await last_message.query_selector(selector)
