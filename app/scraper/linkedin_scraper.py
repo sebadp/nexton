@@ -66,7 +66,8 @@ def parse_relative_timestamp(relative_time: str, normalize_to_noon: bool = True)
                 "RETURN_AS_TIMEZONE_AWARE": False,
             },
         )
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
+        # dateparser can raise these on malformed input or internal errors
         logger.error("dateparser_failed", error=str(e), relative_time=relative_time)
         parsed = None
 
@@ -189,6 +190,10 @@ def _parse_linkedin_custom(relative_time: str, now: datetime) -> datetime | None
                 minute = int(day_time_match.group(3))
                 ampm = day_time_match.group(4)
                 if ampm:
+                    # Convert 12-hour format to 24-hour format:
+                    # - PM (except 12 PM): add 12 hours (e.g., 3 PM -> 15:00)
+                    # - AM at 12: set to 0 (12 AM = midnight = 00:00)
+                    # - 12 PM stays as 12 (noon)
                     if ampm.lower() == "pm" and hour != 12:
                         hour += 12
                     elif ampm.lower() == "am" and hour == 12:
