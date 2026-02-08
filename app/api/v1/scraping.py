@@ -109,12 +109,21 @@ async def _trigger_lite_mode_scraping(
             _scraping_state["last_run_count"] = result.get("opportunities_created", 0)
             _scraping_state["current_task_id"] = None
 
+            # Determine API status based on result
+            api_status = result.get("status", "completed")
+            if api_status == "success":
+                api_status = "completed"
+            elif api_status == "no_messages":
+                api_status = "completed"
+            elif api_status == "error":
+                api_status = "failed"
+
             return ScrapingTriggerResponse(
                 task_id="lite-mode-sync",
-                status=result.get("status", "completed"),
+                status=api_status,
                 message=result.get(
                     "message",
-                    f"Lite mode scraping completed. Created {result.get('opportunities_created', 0)} opportunities.",
+                    f"Scraping completado. Se crearon {result.get('opportunities_created', 0)} oportunidades.",
                 ),
             )
 

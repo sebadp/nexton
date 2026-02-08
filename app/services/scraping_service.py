@@ -86,8 +86,8 @@ class ScrapingService:
             logger.info("lite_mode_messages_found", count=len(messages))
 
             if not messages:
-                results["status"] = "completed"
-                results["message"] = "No new messages found"
+                results["status"] = "no_messages"
+                results["message"] = "No hay mensajes nuevos sin leer en LinkedIn."
                 return results
 
             # Process each message through the pipeline
@@ -126,11 +126,19 @@ class ScrapingService:
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
-            results["status"] = "completed"
+            results["status"] = "success"
             results["duration_seconds"] = duration
-            results[
-                "message"
-            ] = f"Processed {results['messages_processed']} of {results['messages_found']} messages"
+
+            # Build user-friendly message
+            opps_created = results["opportunities_created"]
+            if opps_created == 0:
+                results["message"] = "Scraping completado pero no se crearon oportunidades."
+            elif opps_created == 1:
+                results["message"] = "✅ Scraping completado. Se creó 1 nueva oportunidad."
+            else:
+                results[
+                    "message"
+                ] = f"✅ Scraping completado. Se crearon {opps_created} nuevas oportunidades."
 
             logger.info(
                 "lite_mode_scraping_completed",
@@ -144,8 +152,24 @@ class ScrapingService:
 
         except Exception as e:
             logger.error("lite_mode_scraping_failed", error=str(e))
-            results["status"] = "failed"
+            results["status"] = "error"
             results["error"] = str(e)
+
+            # Provide user-friendly error messages
+            error_str = str(e).lower()
+            if "login" in error_str or "credentials" in error_str:
+                results[
+                    "message"
+                ] = "❌ Error de autenticación: No se pudo iniciar sesión en LinkedIn. Verifica tus credenciales."
+            elif "timeout" in error_str:
+                results[
+                    "message"
+                ] = "❌ LinkedIn no respondió a tiempo. Intenta de nuevo más tarde."
+            elif "session" in error_str or "cookie" in error_str:
+                results["message"] = "❌ La sesión de LinkedIn expiró. Intenta de nuevo."
+            else:
+                results["message"] = f"❌ Error durante el scraping: {str(e)}"
+
             return results
 
         finally:

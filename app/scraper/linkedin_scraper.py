@@ -302,8 +302,11 @@ class LinkedInScraper:
 
                 if not success:
                     raise ScraperError(
-                        message="Failed to login to LinkedIn",
-                        details={"email": self.config.email},
+                        message="Login failed: Could not authenticate with LinkedIn. Please verify your email and password are correct.",
+                        details={
+                            "email": self.config.email,
+                            "hint": "Check LINKEDIN_EMAIL and LINKEDIN_PASSWORD environment variables",
+                        },
                     )
 
             self._is_initialized = True

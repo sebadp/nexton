@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { Toaster } from "@/components/ui/toaster"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PageLoader } from "@/components/LoadingSpinner"
 import { AppLayout } from "@/components/layout/AppLayout"
@@ -80,6 +81,7 @@ function App() {
           </Route>
         </Routes>
       </TooltipProvider>
+      <Toaster />
     </ErrorBoundary>
   )
 }

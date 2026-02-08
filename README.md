@@ -206,6 +206,7 @@ After starting the application, open **http://localhost:3000**
 
 - **Scan LinkedIn Button**: Trigger scraping directly from the dashboard
 - **Real-time Status**: See scraping progress and health status
+- **Toast Notifications**: User-friendly messages for scraping results (success, no messages, errors)
 - **Smart Filtering**: Filter opportunities by tier, status, score, company
 - **Response Management**: Review AI responses before sending
 - **Profile Editor**: Visual editor for all your preferences

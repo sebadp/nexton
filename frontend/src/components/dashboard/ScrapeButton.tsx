@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useScrapingStatus, useTriggerScraping, useCancelScraping } from "@/hooks"
+import { useScrapingStatus, useTriggerScraping, useCancelScraping, toast } from "@/hooks"
 import { formatDateTime } from "@/lib/utils"
 
 export function ScrapeButton() {
@@ -23,8 +23,37 @@ export function ScrapeButton() {
   const isRunning = status?.is_running ?? false
 
   const handleScrape = async () => {
-    await triggerMutation.mutateAsync({ limit: 20, unread_only: true })
-    setDialogOpen(false)
+    try {
+      const result = await triggerMutation.mutateAsync({ limit: 20, unread_only: true })
+      setDialogOpen(false)
+
+      // Show toast with the result message
+      if (result.status === "failed") {
+        toast({
+          variant: "destructive",
+          title: "Error en el scraping",
+          description: result.message,
+        })
+      } else if (result.message?.includes("No hay mensajes") || result.message?.includes("no se crearon")) {
+        toast({
+          title: "Scraping completado",
+          description: result.message,
+        })
+      } else {
+        toast({
+          variant: "success",
+          title: "Scraping exitoso",
+          description: result.message,
+        })
+      }
+    } catch (error) {
+      setDialogOpen(false)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al ejecutar el scraping",
+      })
+    }
   }
 
   const handleCancel = async () => {
