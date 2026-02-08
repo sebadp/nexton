@@ -167,33 +167,16 @@ class OpportunityService:
                     "tier": pipeline_result.scoring.tier,
                 },
             ):
-                opportunity = await self.repository.create(
-                    recruiter_name=pipeline_result.recruiter_name,
-                    raw_message=raw_message,
-                    # Extracted data
-                    company=pipeline_result.extracted.company,
-                    role=pipeline_result.extracted.role,
-                    seniority=pipeline_result.extracted.seniority,
-                    tech_stack=pipeline_result.extracted.tech_stack,
-                    salary_min=pipeline_result.extracted.salary_min,
-                    salary_max=pipeline_result.extracted.salary_max,
-                    currency=pipeline_result.extracted.currency,
-                    location=pipeline_result.extracted.location,
-                    remote_policy=pipeline_result.extracted.remote_policy,
-                    # Scoring
-                    tech_stack_score=pipeline_result.scoring.tech_stack_score,
-                    salary_score=pipeline_result.scoring.salary_score,
-                    seniority_score=pipeline_result.scoring.seniority_score,
-                    company_score=pipeline_result.scoring.company_score,
-                    total_score=pipeline_result.scoring.total_score,
-                    tier=pipeline_result.scoring.tier,
-                    # Response
-                    ai_response=pipeline_result.ai_response,
-                    # Metadata
-                    status="processed",
-                    processing_time_ms=processing_time_ms,
-                    message_timestamp=message_timestamp,
-                )
+                # Use to_db_dict to ensure all metadata is correctly mapped
+                # (processing_status, conversation_state, hard_filter_results, etc.)
+                opp_data = pipeline_result.to_db_dict()
+
+                # Override specific fields
+                opp_data["status"] = "processed"  # Lifecycle status is always processed here
+                opp_data["processing_time_ms"] = processing_time_ms
+                opp_data["message_timestamp"] = message_timestamp
+
+                opportunity = await self.repository.create(**opp_data)
 
                 await self.db.commit()
                 add_span_event("opportunity_created", {"opportunity_id": opportunity.id})
