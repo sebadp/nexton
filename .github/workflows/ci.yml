@@ -104,10 +104,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 1.7.1
+      - name: Install Poetry
+        run: pipx install poetry==1.7.1
 
       - name: Install dependencies
         run: |
