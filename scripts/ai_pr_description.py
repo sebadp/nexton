@@ -22,6 +22,32 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+# =============================================================================
+# LLM Configuration Constants
+# =============================================================================
+
+# Known OpenAI/GPT model prefixes - used to detect if we need to switch models
+# when changing from OpenAI to Gemini provider
+OPENAI_MODEL_PREFIXES = (
+    "gpt-",
+    "gpt3",
+    "gpt4",
+    "o1-",
+    "o3-",
+    "text-davinci",
+    "text-curie",
+    "text-babbage",
+    "text-ada",
+    "davinci",
+    "curie",
+    "babbage",
+    "ada",
+)
+
+DEFAULT_GEMINI_MODEL = "models/gemini-2.0-flash"
+DEFAULT_OPENAI_MODEL = "gpt-4-turbo-preview"
+
+
 class PRContent(BaseModel):
     title: str
     description: str
@@ -67,26 +93,6 @@ def configure_llm():
     - If current model looks like a GPT/OpenAI model, switch to Gemini default
     - If model doesn't contain 'gemini', switch to Gemini default
     """
-    # Known OpenAI/GPT model prefixes - used to detect if we need to switch models
-    # when changing from OpenAI to Gemini provider
-    OPENAI_MODEL_PREFIXES = (
-        "gpt-",
-        "gpt3",
-        "gpt4",
-        "o1-",
-        "o3-",
-        "text-davinci",
-        "text-curie",
-        "text-babbage",
-        "text-ada",
-        "davinci",
-        "curie",
-        "babbage",
-        "ada",
-    )
-
-    DEFAULT_GEMINI_MODEL = "models/gemini-2.0-flash"
-
     # Read configuration from environment
     gemini_key = os.getenv("GEMINI_API_KEY")
     provider = os.getenv("LLM_PROVIDER", settings.LLM_PROVIDER)
@@ -141,6 +147,7 @@ def configure_llm():
 
         lm = dspy.LM(model=final_model_name, api_key=gemini_key)
         dspy.settings.configure(lm=lm)
+        logger.info("llm_configured", provider="gemini", model=final_model_name)
         return
 
     # --- Fallback: OpenAI or Anthropic ---
@@ -152,18 +159,23 @@ def configure_llm():
 
     print(f"Configuring AI Describer with {provider}/{model}")
 
+    final_model_name = model
     if provider == "openai":
-        lm = dspy.LM(model=f"openai/{model}", api_key=os.getenv("OPENAI_API_KEY"), max_tokens=2000)
+        final_model_name = f"openai/{model}"
+        lm = dspy.LM(model=final_model_name, api_key=os.getenv("OPENAI_API_KEY"), max_tokens=2000)
     elif provider == "anthropic":
+        final_model_name = f"anthropic/{model}"
         lm = dspy.LM(
-            model=f"anthropic/{model}", api_key=os.getenv("ANTHROPIC_API_KEY"), max_tokens=2000
+            model=final_model_name, api_key=os.getenv("ANTHROPIC_API_KEY"), max_tokens=2000
         )
     else:
         # Final fallback when no valid provider configured
         logger.warning("llm_fallback_to_default", original_provider=provider)
-        lm = dspy.LM(model="openai/gpt-4-turbo-preview", max_tokens=2000)
+        final_model_name = f"openai/{DEFAULT_OPENAI_MODEL}"
+        lm = dspy.LM(model=final_model_name, max_tokens=2000)
 
     dspy.settings.configure(lm=lm)
+    logger.info("llm_configured", provider=provider, model=final_model_name)
 
 
 def main():

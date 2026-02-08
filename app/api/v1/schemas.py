@@ -129,6 +129,15 @@ class OpportunityResponse(BaseModel):
         description="Original timestamp from LinkedIn message",
     )
 
+    @field_validator("message_timestamp")
+    @classmethod
+    def validate_message_timestamp(cls, v: datetime | None) -> datetime | None:
+        """Ensure message_timestamp is not a future date."""
+        if v is not None and v > datetime.now():
+            # If somehow a future date slipped through, cap it to now
+            return datetime.now()
+        return v
+
     class Config:
         from_attributes = True
         json_schema_extra = {
