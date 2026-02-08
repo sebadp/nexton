@@ -105,6 +105,7 @@ class ScrapingService:
                     opportunity = await service.create_opportunity(
                         recruiter_name=msg.sender_name,
                         raw_message=msg.message_text,
+                        message_timestamp=msg.timestamp,
                         use_cache=False,  # No Redis cache in lite mode
                     )
 

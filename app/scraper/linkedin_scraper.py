@@ -32,6 +32,9 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
     - "1mo" (months ago)
     - "Just now" / "Ahora" (now)
     - "Yesterday" / "Ayer"
+    - "viernes" / "Friday" (last occurrence of that weekday)
+    - "29 ene" / "Jan 29" (specific date)
+    - "15:17" (time today)
 
     Args:
         relative_time: The relative time string from LinkedIn
@@ -40,7 +43,17 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
         Datetime object representing the parsed time
     """
     now = datetime.now()
+    original_time = relative_time
     relative_time = relative_time.strip().lower()
+
+    # Debug logging
+    logger.debug(
+        "parse_relative_timestamp_input",
+        original=original_time,
+        normalized=relative_time,
+        current_weekday=now.weekday(),
+        current_date=now.strftime("%Y-%m-%d"),
+    )
 
     # Handle "just now" / "ahora" variations
     if relative_time in ["just now", "ahora", "now", "hace un momento"]:
@@ -49,6 +62,187 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
     # Handle "yesterday" / "ayer"
     if relative_time in ["yesterday", "ayer"]:
         return now - timedelta(days=1)
+
+    # Handle "today" / "hoy"
+    if relative_time in ["today", "hoy"]:
+        return now
+
+    # Handle day names (viernes, sábado, monday, tuesday, etc.)
+    # Can be just "viernes" or "viernes 15:30"
+    day_names_spanish = {
+        "lunes": 0,
+        "martes": 1,
+        "miércoles": 2,
+        "miercoles": 2,
+        "jueves": 3,
+        "viernes": 4,
+        "sábado": 5,
+        "sabado": 5,
+        "domingo": 6,
+    }
+    day_names_english = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    all_day_names = {**day_names_spanish, **day_names_english}
+
+    # First check exact match
+    if relative_time in all_day_names:
+        target_weekday = all_day_names[relative_time]
+        current_weekday = now.weekday()
+        # Calculate days back (if same day, it means last week)
+        days_back = (current_weekday - target_weekday) % 7
+        if days_back == 0:
+            days_back = 7  # Same day means last week
+        return now - timedelta(days=days_back)
+
+    # Try matching "day_name HH:MM" or "day_name, HH:MM" pattern
+    day_pattern = "|".join(re.escape(d) for d in all_day_names.keys())
+    day_time_match = re.match(
+        rf"^({day_pattern})(?:,?\s+(\d{{1,2}}):(\d{{2}})(?:\s*(am|pm))?)?$",
+        relative_time,
+        re.IGNORECASE,
+    )
+    if day_time_match:
+        day_name = day_time_match.group(1).lower()
+        # Normalize accents for lookup
+        normalized_day = (
+            day_name.replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+        )
+        weekday_num = all_day_names.get(day_name) or all_day_names.get(normalized_day)
+        if weekday_num is not None:
+            current_weekday = now.weekday()
+            days_back = (current_weekday - weekday_num) % 7
+            if days_back == 0:
+                days_back = 7
+            result_date = now - timedelta(days=days_back)
+            # If time was provided, set it
+            if day_time_match.group(2) and day_time_match.group(3):
+                hour = int(day_time_match.group(2))
+                minute = int(day_time_match.group(3))
+                ampm = day_time_match.group(4)
+                if ampm:
+                    if ampm.lower() == "pm" and hour != 12:
+                        hour += 12
+                    elif ampm.lower() == "am" and hour == 12:
+                        hour = 0
+                result_date = result_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            return result_date
+
+    # Handle time-only format (15:17, 3:45 PM)
+    time_match = re.match(r"^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$", relative_time)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+        ampm = time_match.group(3)
+        if ampm:
+            if ampm == "pm" and hour != 12:
+                hour += 12
+            elif ampm == "am" and hour == 12:
+                hour = 0
+        return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    # Handle date + month format (29 ene, Jan 29, 29 de enero)
+    month_names_spanish = {
+        "ene": 1,
+        "enero": 1,
+        "feb": 2,
+        "febrero": 2,
+        "mar": 3,
+        "marzo": 3,
+        "abr": 4,
+        "abril": 4,
+        "may": 5,
+        "mayo": 5,
+        "jun": 6,
+        "junio": 6,
+        "jul": 7,
+        "julio": 7,
+        "ago": 8,
+        "agosto": 8,
+        "sep": 9,
+        "sept": 9,
+        "septiembre": 9,
+        "oct": 10,
+        "octubre": 10,
+        "nov": 11,
+        "noviembre": 11,
+        "dic": 12,
+        "diciembre": 12,
+    }
+    month_names_english = {
+        "jan": 1,
+        "january": 1,
+        "feb": 2,
+        "february": 2,
+        "mar": 3,
+        "march": 3,
+        "apr": 4,
+        "april": 4,
+        "may": 5,
+        "jun": 6,
+        "june": 6,
+        "jul": 7,
+        "july": 7,
+        "aug": 8,
+        "august": 8,
+        "sep": 9,
+        "sept": 9,
+        "september": 9,
+        "oct": 10,
+        "october": 10,
+        "nov": 11,
+        "november": 11,
+        "dec": 12,
+        "december": 12,
+    }
+    all_month_names = {**month_names_spanish, **month_names_english}
+
+    # Pattern: "29 ene" or "29 de enero"
+    date_month_match = re.match(r"^(\d{1,2})(?:\s+de)?\s+([a-záéíóú]+)\.?$", relative_time)
+    if date_month_match:
+        day = int(date_month_match.group(1))
+        month_str = date_month_match.group(2).lower()
+        if month_str in all_month_names:
+            month = all_month_names[month_str]
+            year = now.year
+            # If the date is in the future, it must be last year
+            try:
+                parsed_date = now.replace(
+                    month=month, day=day, hour=0, minute=0, second=0, microsecond=0
+                )
+                if parsed_date > now:
+                    parsed_date = parsed_date.replace(year=year - 1)
+                return parsed_date
+            except ValueError:
+                pass  # Invalid date, continue to other patterns
+
+    # Pattern: "Jan 29" or "January 29"
+    month_date_match = re.match(r"^([a-z]+)\.?\s+(\d{1,2})$", relative_time)
+    if month_date_match:
+        month_str = month_date_match.group(1).lower()
+        day = int(month_date_match.group(2))
+        if month_str in all_month_names:
+            month = all_month_names[month_str]
+            year = now.year
+            try:
+                parsed_date = now.replace(
+                    month=month, day=day, hour=0, minute=0, second=0, microsecond=0
+                )
+                if parsed_date > now:
+                    parsed_date = parsed_date.replace(year=year - 1)
+                return parsed_date
+            except ValueError:
+                pass
 
     # Patterns for relative times (English and Spanish)
     # Match patterns like: "2h", "2 h", "2h ago", "2 hours ago", "hace 2 h"
@@ -88,7 +282,7 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
                 return now - timedelta(days=value * 30)
 
     # If no pattern matched, log and return now
-    logger.warning("failed_to_parse_relative_time", relative_time=relative_time)
+    logger.warning("failed_to_parse_relative_time", relative_time=original_time)
     return now
 
 
@@ -601,7 +795,9 @@ class LinkedInScraper:
                 '[class*="msg-s-event-listitem__timestamp"]',
             ]
 
-            message_timestamp = datetime.now()  # Default fallback
+            timestamp_fallback = datetime.now()  # Store fallback timestamp
+            message_timestamp = timestamp_fallback  # Default to fallback
+            timestamp_found = False
             for selector in timestamp_selectors:
                 try:
                     time_element = await last_message.query_selector(selector)
@@ -613,6 +809,7 @@ class LinkedInScraper:
                                 message_timestamp = datetime.fromisoformat(
                                     datetime_attr.replace("Z", "+00:00")
                                 )
+                                timestamp_found = True
                                 logger.debug(
                                     "timestamp_from_datetime_attr",
                                     selector=selector,
@@ -626,6 +823,7 @@ class LinkedInScraper:
                         time_text = await time_element.inner_text()
                         if time_text:
                             message_timestamp = parse_relative_timestamp(time_text)
+                            timestamp_found = True
                             logger.debug(
                                 "timestamp_from_text",
                                 selector=selector,
@@ -638,7 +836,7 @@ class LinkedInScraper:
                     continue
 
             # If no timestamp found in message, try conversation header
-            if message_timestamp == datetime.now():
+            if not timestamp_found:
                 header_time_selectors = [
                     "header time",
                     'div[class*="conversation-header"] time',

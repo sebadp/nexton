@@ -212,6 +212,12 @@ migrate-down:  ## Rollback last migration
 migrate-history:  ## Show migration history
 	docker-compose exec app alembic history
 
+migrate-lite:  ## Run database migrations (lite mode)
+	docker-compose -f docker-compose.lite.yml exec app alembic upgrade head
+
+migrate-lite-down:  ## Rollback last migration (lite mode)
+	docker-compose -f docker-compose.lite.yml exec app alembic downgrade -1
+
 # ==========================================
 # REDIS
 # ==========================================

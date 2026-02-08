@@ -79,7 +79,7 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              <span>{formatDate(opportunity.created_at)}</span>
+              <span>{formatDate(opportunity.message_timestamp || opportunity.created_at)}</span>
             </div>
             <Badge
               variant={

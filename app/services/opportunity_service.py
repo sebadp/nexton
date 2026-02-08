@@ -63,6 +63,7 @@ class OpportunityService:
         self,
         recruiter_name: str,
         raw_message: str,
+        message_timestamp: datetime | None = None,
         use_cache: bool = True,
     ) -> Opportunity:
         """
@@ -191,6 +192,7 @@ class OpportunityService:
                     # Metadata
                     status="processed",
                     processing_time_ms=processing_time_ms,
+                    message_timestamp=message_timestamp,
                 )
 
                 await self.db.commit()
@@ -583,4 +585,7 @@ class OpportunityService:
             "processing_time_ms": opportunity.processing_time_ms,
             "created_at": opportunity.created_at.isoformat() if opportunity.created_at else None,
             "updated_at": opportunity.updated_at.isoformat() if opportunity.updated_at else None,
+            "message_timestamp": opportunity.message_timestamp.isoformat()
+            if opportunity.message_timestamp
+            else None,
         }
