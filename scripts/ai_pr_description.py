@@ -54,32 +54,87 @@ def get_pr_diff(pr: PullRequest) -> str:
 
 
 def configure_llm():
-    """Configure DSPy with the environment's LLM provider."""
-    # Prioritize Gemini if key is present, or check LLM_PROVIDER
+    """
+    Configure DSPy with the environment's LLM provider.
+
+    Provider Selection Priority (in order):
+    1. If LLM_PROVIDER=gemini AND GEMINI_API_KEY exists → Use Gemini
+    2. If GEMINI_API_KEY exists AND no OPENAI_API_KEY → Use Gemini (auto-detect)
+    3. If GEMINI_API_KEY exists AND LLM_PROVIDER is not openai/anthropic → Use Gemini
+    4. Otherwise → Fall back to OpenAI or Anthropic based on available keys
+
+    Model Selection for Gemini:
+    - If current model looks like a GPT/OpenAI model, switch to Gemini default
+    - If model doesn't contain 'gemini', switch to Gemini default
+    """
+    # Known OpenAI/GPT model prefixes - used to detect if we need to switch models
+    # when changing from OpenAI to Gemini provider
+    OPENAI_MODEL_PREFIXES = (
+        "gpt-",
+        "gpt3",
+        "gpt4",
+        "o1-",
+        "o3-",
+        "text-davinci",
+        "text-curie",
+        "text-babbage",
+        "text-ada",
+        "davinci",
+        "curie",
+        "babbage",
+        "ada",
+    )
+
+    DEFAULT_GEMINI_MODEL = "models/gemini-2.0-flash"
+
+    # Read configuration from environment
     gemini_key = os.getenv("GEMINI_API_KEY")
     provider = os.getenv("LLM_PROVIDER", settings.LLM_PROVIDER)
     model = os.getenv("LLM_MODEL", settings.LLM_MODEL)
-
-    # Determine which provider to use
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
 
+    # --- Provider Selection Logic ---
+    # Determine if we should use Gemini based on priority rules
     use_gemini = False
+
+    # Priority 1: Explicit provider=gemini with valid key
     if provider == "gemini" and gemini_key:
         use_gemini = True
+        logger.debug("llm_selection", reason="explicit_gemini_provider")
+
+    # Priority 2: Gemini key exists but no OpenAI key (auto-detect)
     elif gemini_key and not has_openai:
         use_gemini = True
-    elif gemini_key and provider not in ["openai", "anthropic"]:
-        # If provider is unset or unknown, and we have a gemini key, prefer it
-        use_gemini = True
+        logger.debug("llm_selection", reason="gemini_key_available_no_openai")
 
+    # Priority 3: Gemini key exists and provider is not explicitly openai/anthropic
+    elif gemini_key and provider not in ["openai", "anthropic"]:
+        use_gemini = True
+        logger.debug("llm_selection", reason="gemini_key_with_unknown_provider")
+
+    # --- Configure Gemini ---
     if use_gemini:
-        # Sanitize model: if it looks like a GPT model or is missing, default to a safe Gemini model
         target_model = model
-        if not target_model or target_model.startswith("gpt") or "gemini" not in target_model:
-            target_model = "models/gemini-2.0-flash"
+
+        # Check if current model is an OpenAI model (needs switching to Gemini)
+        is_openai_model = (
+            not target_model
+            or target_model.lower().startswith(OPENAI_MODEL_PREFIXES)
+            or "gemini" not in target_model.lower()
+        )
+
+        if is_openai_model:
+            logger.debug(
+                "llm_model_switch",
+                from_model=target_model,
+                to_model=DEFAULT_GEMINI_MODEL,
+                reason="incompatible_model_for_gemini",
+            )
+            target_model = DEFAULT_GEMINI_MODEL
 
         print(f"Configuring AI Describer with Gemini ({target_model})")
 
+        # Normalize model name for DSPy (needs gemini/ prefix)
         final_model_name = target_model
         if not final_model_name.startswith("gemini/") and "gemini" in final_model_name:
             final_model_name = "gemini/" + final_model_name.replace("models/", "")
@@ -88,11 +143,12 @@ def configure_llm():
         dspy.settings.configure(lm=lm)
         return
 
-    # Fallback to other providers
+    # --- Fallback: OpenAI or Anthropic ---
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
 
     if not api_key:
         print("Warning: No API Key found for AI Describer")
+        logger.warning("llm_no_api_key", provider=provider)
 
     print(f"Configuring AI Describer with {provider}/{model}")
 
@@ -103,6 +159,8 @@ def configure_llm():
             model=f"anthropic/{model}", api_key=os.getenv("ANTHROPIC_API_KEY"), max_tokens=2000
         )
     else:
+        # Final fallback when no valid provider configured
+        logger.warning("llm_fallback_to_default", original_provider=provider)
         lm = dspy.LM(model="openai/gpt-4-turbo-preview", max_tokens=2000)
 
     dspy.settings.configure(lm=lm)

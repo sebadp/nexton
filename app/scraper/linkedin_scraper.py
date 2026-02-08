@@ -21,7 +21,7 @@ from app.scraper.session_manager import SessionManager
 logger = get_logger(__name__)
 
 
-def parse_relative_timestamp(relative_time: str) -> datetime:
+def parse_relative_timestamp(relative_time: str, normalize_to_noon: bool = True) -> datetime:
     """
     Parse LinkedIn's relative timestamp format to a datetime object.
 
@@ -30,6 +30,9 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
 
     Args:
         relative_time: The relative time string from LinkedIn
+        normalize_to_noon: If True, sets time to 12:00 to avoid timezone-related
+                          day shifts when displaying across different timezones.
+                          Default is True for safety.
 
     Returns:
         Datetime object representing the parsed time
@@ -53,26 +56,34 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
         return now
 
     # Try dateparser first - handles most formats and locales automatically
-    parsed = dateparser.parse(
-        relative_time,
-        settings={
-            "PREFER_DATES_FROM": "past",
-            "RELATIVE_BASE": now,
-            "RETURN_AS_TIMEZONE_AWARE": False,
-        },
-    )
+    parsed: datetime | None = None
+    try:
+        parsed = dateparser.parse(
+            relative_time,
+            settings={
+                "PREFER_DATES_FROM": "past",
+                "RELATIVE_BASE": now,
+                "RETURN_AS_TIMEZONE_AWARE": False,
+            },
+        )
+    except Exception as e:
+        logger.error("dateparser_failed", error=str(e), relative_time=relative_time)
+        parsed = None
 
     if parsed:
         # Normalize to noon (12:00) to avoid timezone-related day shifts
         # When dates like "6 feb" are parsed, they default to 00:00:00
         # If frontend displays in a timezone like UTC-3, it would show Feb 5 21:00
         # Setting to noon ensures the day stays correct across timezones
-        result_dt: datetime = parsed.replace(hour=12, minute=0, second=0, microsecond=0)
+        if normalize_to_noon:
+            parsed = parsed.replace(hour=12, minute=0, second=0, microsecond=0)
+        result_dt: datetime = parsed
         logger.debug(
             "parse_relative_timestamp_success",
             original=original_time,
             parsed=result_dt.isoformat(),
             parser="dateparser",
+            normalized_to_noon=normalize_to_noon,
         )
         return result_dt
 
@@ -80,13 +91,15 @@ def parse_relative_timestamp(relative_time: str) -> datetime:
     result = _parse_linkedin_custom(normalized, now)
 
     if result:
-        # Also normalize custom-parsed results to noon
-        result = result.replace(hour=12, minute=0, second=0, microsecond=0)
+        # Also normalize custom-parsed results to noon if enabled
+        if normalize_to_noon:
+            result = result.replace(hour=12, minute=0, second=0, microsecond=0)
         logger.debug(
             "parse_relative_timestamp_success",
             original=original_time,
             parsed=result.isoformat(),
             parser="custom",
+            normalized_to_noon=normalize_to_noon,
         )
         return result
 
