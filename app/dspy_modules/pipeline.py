@@ -279,25 +279,14 @@ class OpportunityPipeline(dspy.Module):
             profile_dict=profile_dict,
         )
 
-        # Create minimal extracted data (follow-ups don't need full extraction)
-        extracted = ExtractedData(
-            company="N/A - Follow-up",
-            role="N/A - Follow-up",
-            seniority="Unknown",
-            tech_stack=[],
-        )
+        # Perform meaningful extraction on follow-up messages too
+        # Since we now have full conversation history, we can extract company/role even from follow-ups
+        logger.debug("pipeline_step", step="follow_up_extraction")
+        extracted = self.analyzer(message=message)
 
-        # Create minimal scoring (follow-ups don't need scoring)
-        scoring = ScoringResult(
-            tech_stack_score=0,
-            tech_stack_reasoning="Not applicable - follow-up message",
-            salary_score=0,
-            salary_reasoning="Not applicable - follow-up message",
-            seniority_score=0,
-            seniority_reasoning="Not applicable - follow-up message",
-            company_score=0,
-            company_reasoning="Not applicable - follow-up message",
-        )
+        # Score the opportunity based on the extracted data
+        logger.debug("pipeline_step", step="follow_up_scoring")
+        scoring = self.scorer(extracted=extracted, profile=profile)
 
         # Calculate processing time
         processing_time_ms = int((time.time() - start_time) * 1000)
