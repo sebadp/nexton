@@ -106,7 +106,9 @@ class MessageAnalysisSignature(dspy.Signature):
     """
 
     # Input
-    message: str = dspy.InputField(desc="Raw LinkedIn message from recruiter")
+    message: str = dspy.InputField(
+        desc="Full conversation history or raw message text. Format: [Sender]: Message..."
+    )
 
     # Outputs
     company: str = dspy.OutputField(desc="Company name mentioned in the message")
