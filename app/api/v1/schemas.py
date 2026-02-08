@@ -124,6 +124,19 @@ class OpportunityResponse(BaseModel):
     processing_time_ms: int | None = None
     created_at: datetime
     updated_at: datetime
+    message_timestamp: datetime | None = Field(
+        None,
+        description="Original timestamp from LinkedIn message",
+    )
+
+    @field_validator("message_timestamp")
+    @classmethod
+    def validate_message_timestamp(cls, v: datetime | None) -> datetime | None:
+        """Ensure message_timestamp is not a future date."""
+        if v is not None and v > datetime.now():
+            # If somehow a future date slipped through, cap it to now
+            return datetime.now()
+        return v
 
     class Config:
         from_attributes = True
@@ -161,6 +174,7 @@ class OpportunityResponse(BaseModel):
                 "processing_time_ms": 1500,
                 "created_at": "2024-01-16T10:00:00",
                 "updated_at": "2024-01-16T10:00:00",
+                "message_timestamp": "2024-01-15T15:30:00",
             }
         }
 

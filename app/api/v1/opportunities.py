@@ -70,6 +70,7 @@ def _opportunity_to_response(opportunity: Opportunity) -> OpportunityResponse:
         processing_time_ms=opportunity.processing_time_ms,
         created_at=opportunity.created_at,
         updated_at=opportunity.updated_at,
+        message_timestamp=opportunity.message_timestamp,
     )
 
 

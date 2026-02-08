@@ -219,7 +219,8 @@ export default function OpportunityDetail() {
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">
-                    {formatDateTime(opportunity.created_at)}
+                    <span className="text-muted-foreground">Message: </span>
+                    {formatDateTime(opportunity.message_timestamp || opportunity.created_at)}
                   </span>
                 </div>
               </div>
@@ -342,8 +343,16 @@ export default function OpportunityDetail() {
                   </span>
                 </div>
               )}
+              {opportunity.message_timestamp && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Message Date</span>
+                  <span className="text-sm">
+                    {formatDate(opportunity.message_timestamp)}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Created</span>
+                <span className="text-sm text-muted-foreground">Processed</span>
                 <span className="text-sm">
                   {formatDate(opportunity.created_at)}
                 </span>

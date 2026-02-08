@@ -21,75 +21,187 @@ from app.scraper.session_manager import SessionManager
 logger = get_logger(__name__)
 
 
-def parse_relative_timestamp(relative_time: str) -> datetime:
+def parse_relative_timestamp(relative_time: str, normalize_to_noon: bool = True) -> datetime:
     """
     Parse LinkedIn's relative timestamp format to a datetime object.
 
-    LinkedIn uses formats like:
-    - "2h" or "2 hr" (hours ago)
-    - "3d" (days ago)
-    - "1w" (weeks ago)
-    - "1mo" (months ago)
-    - "Just now" / "Ahora" (now)
-    - "Yesterday" / "Ayer"
+    Uses dateparser library for robust multilingual parsing, with custom
+    fallback logic for LinkedIn-specific edge cases.
 
     Args:
         relative_time: The relative time string from LinkedIn
+        normalize_to_noon: If True, sets time to 12:00 to avoid timezone-related
+                          day shifts when displaying across different timezones.
+                          Default is True for safety.
 
     Returns:
         Datetime object representing the parsed time
     """
-    now = datetime.now()
-    relative_time = relative_time.strip().lower()
+    import dateparser
 
-    # Handle "just now" / "ahora" variations
-    if relative_time in ["just now", "ahora", "now", "hace un momento"]:
+    now = datetime.now()
+    original_time = relative_time
+    normalized = relative_time.strip().lower()
+
+    # Debug logging
+    logger.debug(
+        "parse_relative_timestamp_input",
+        original=original_time,
+        normalized=normalized,
+    )
+
+    # Quick check for empty/invalid input
+    if not normalized:
+        logger.warning("empty_timestamp_input", original=original_time)
         return now
 
-    # Handle "yesterday" / "ayer"
-    if relative_time in ["yesterday", "ayer"]:
-        return now - timedelta(days=1)
+    # Try dateparser first - handles most formats and locales automatically
+    parsed: datetime | None = None
+    try:
+        parsed = dateparser.parse(
+            relative_time,
+            settings={
+                "PREFER_DATES_FROM": "past",
+                "RELATIVE_BASE": now,
+                "RETURN_AS_TIMEZONE_AWARE": False,
+            },
+        )
+    except (ValueError, TypeError, AttributeError) as e:
+        # dateparser can raise these on malformed input or internal errors
+        logger.error("dateparser_failed", error=str(e), relative_time=relative_time)
+        parsed = None
 
-    # Patterns for relative times (English and Spanish)
-    # Match patterns like: "2h", "2 h", "2h ago", "2 hours ago", "hace 2 h"
-    patterns = [
-        # English patterns
-        (r"(\d+)\s*(?:h|hr|hour|hours?)(?:\s*ago)?", "hours"),
-        (r"(\d+)\s*(?:d|day|days?)(?:\s*ago)?", "days"),
-        (r"(\d+)\s*(?:w|wk|week|weeks?)(?:\s*ago)?", "weeks"),
-        (r"(\d+)\s*(?:mo|month|months?)(?:\s*ago)?", "months"),
-        (r"(\d+)\s*(?:m|min|mins|minute|minutes?)(?:\s*ago)?", "minutes"),
-        (r"(\d+)\s*(?:s|sec|secs|second|seconds?)(?:\s*ago)?", "seconds"),
-        # Spanish patterns (hace X ...)
-        (r"hace\s*(\d+)\s*(?:h|hr|hora|horas?)", "hours"),
-        (r"hace\s*(\d+)\s*(?:d|día|dias?|días?)", "days"),
-        (r"hace\s*(\d+)\s*(?:sem|semana|semanas?)", "weeks"),
-        (r"hace\s*(\d+)\s*(?:mes|meses?)", "months"),
-        (r"hace\s*(\d+)\s*(?:m|min|minuto|minutos?)", "minutes"),
-        (r"hace\s*(\d+)\s*(?:s|seg|segundo|segundos?)", "seconds"),
-    ]
+    if parsed:
+        # Normalize to noon (12:00) to avoid timezone-related day shifts
+        # When dates like "6 feb" are parsed, they default to 00:00:00
+        # If frontend displays in a timezone like UTC-3, it would show Feb 5 21:00
+        # Setting to noon ensures the day stays correct across timezones
+        if normalize_to_noon:
+            parsed = parsed.replace(hour=12, minute=0, second=0, microsecond=0)
+        result_dt: datetime = parsed
+        logger.debug(
+            "parse_relative_timestamp_success",
+            original=original_time,
+            parsed=result_dt.isoformat(),
+            parser="dateparser",
+            normalized_to_noon=normalize_to_noon,
+        )
+        return result_dt
 
-    for pattern, unit in patterns:
-        match = re.search(pattern, relative_time, re.IGNORECASE)
-        if match:
-            value = int(match.group(1))
-            if unit == "seconds":
-                return now - timedelta(seconds=value)
-            elif unit == "minutes":
-                return now - timedelta(minutes=value)
-            elif unit == "hours":
-                return now - timedelta(hours=value)
-            elif unit == "days":
-                return now - timedelta(days=value)
-            elif unit == "weeks":
-                return now - timedelta(weeks=value)
-            elif unit == "months":
-                # Approximate: 30 days per month
-                return now - timedelta(days=value * 30)
+    # Fallback: Custom parsing for LinkedIn-specific edge cases
+    result = _parse_linkedin_custom(normalized, now)
 
-    # If no pattern matched, log and return now
-    logger.warning("failed_to_parse_relative_time", relative_time=relative_time)
+    if result:
+        # Also normalize custom-parsed results to noon if enabled
+        if normalize_to_noon:
+            result = result.replace(hour=12, minute=0, second=0, microsecond=0)
+        logger.debug(
+            "parse_relative_timestamp_success",
+            original=original_time,
+            parsed=result.isoformat(),
+            parser="custom",
+            normalized_to_noon=normalize_to_noon,
+        )
+        return result
+
+    # If nothing worked, log warning and return current time
+    logger.warning(
+        "parse_relative_timestamp_failed",
+        original=original_time,
+        normalized=normalized,
+    )
     return now
+
+
+def _parse_linkedin_custom(relative_time: str, now: datetime) -> datetime | None:
+    """
+    Custom parsing logic for LinkedIn-specific timestamp formats.
+
+    Handles edge cases that dateparser might miss, particularly:
+    - Day names without time (just "viernes")
+    - Abbreviated Spanish months ("29 ene")
+    """
+    # Handle day names (viernes, monday, etc.)
+    day_names = {
+        # Spanish
+        "lunes": 0,
+        "martes": 1,
+        "miércoles": 2,
+        "miercoles": 2,
+        "jueves": 3,
+        "viernes": 4,
+        "sábado": 5,
+        "sabado": 5,
+        "domingo": 6,
+        # English
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+
+    # Normalize accents
+    normalized = (
+        relative_time.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+    )
+
+    # Check exact day name match
+    if normalized in day_names:
+        target_weekday = day_names[normalized]
+        current_weekday = now.weekday()
+        days_back = (current_weekday - target_weekday) % 7
+        if days_back == 0:
+            days_back = 7  # Same day means last week
+        return now - timedelta(days=days_back)
+
+    # Day name with time: "viernes 15:30"
+    day_pattern = "|".join(re.escape(d) for d in day_names.keys())
+    day_time_match = re.match(
+        rf"^({day_pattern})(?:,?\s+(\d{{1,2}}):(\d{{2}})(?:\s*(am|pm))?)?$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if day_time_match:
+        day_name = day_time_match.group(1).lower()
+        day_normalized = (
+            day_name.replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+        )
+        weekday_num = day_names.get(day_name) or day_names.get(day_normalized)
+        if weekday_num is not None:
+            current_weekday = now.weekday()
+            days_back = (current_weekday - weekday_num) % 7
+            if days_back == 0:
+                days_back = 7
+            result_date = now - timedelta(days=days_back)
+            # Apply time if provided
+            if day_time_match.group(2) and day_time_match.group(3):
+                hour = int(day_time_match.group(2))
+                minute = int(day_time_match.group(3))
+                ampm = day_time_match.group(4)
+                if ampm:
+                    # Convert 12-hour format to 24-hour format:
+                    # - PM (except 12 PM): add 12 hours (e.g., 3 PM -> 15:00)
+                    # - AM at 12: set to 0 (12 AM = midnight = 00:00)
+                    # - 12 PM stays as 12 (noon)
+                    if ampm.lower() == "pm" and hour != 12:
+                        hour += 12
+                    elif ampm.lower() == "am" and hour == 12:
+                        hour = 0
+                result_date = result_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            return result_date
+
+    return None
 
 
 @dataclass
@@ -351,12 +463,20 @@ class LinkedInScraper:
                         if not is_unread:
                             continue
 
+                    # Extract timestamp from conversation list item BEFORE clicking
+                    # This is more reliable than extracting from the message history
+                    list_timestamp = await self._extract_timestamp_from_conversation_list(
+                        conversation
+                    )
+
                     # Click on conversation to open it
                     await conversation.click()
                     await asyncio.sleep(1)  # Wait for message to load
 
-                    # Extract message details
-                    message = await self._extract_message_from_conversation(page)
+                    # Extract message details (passing list timestamp as override)
+                    message = await self._extract_message_from_conversation(
+                        page, list_timestamp=list_timestamp
+                    )
 
                     if message:
                         messages.append(message)
@@ -387,12 +507,90 @@ class LinkedInScraper:
                 message="Failed to scrape messages", details={"error": str(e)}
             ) from e
 
-    async def _extract_message_from_conversation(self, page: Page) -> LinkedInMessage | None:
+    async def _extract_timestamp_from_conversation_list(
+        self, conversation_element
+    ) -> datetime | None:
+        """
+        Extract timestamp from conversation list item (left panel).
+
+        LinkedIn's conversation list shows the timestamp of the last message
+        next to the sender's name. This is more reliable than extracting
+        from the message history.
+
+        Args:
+            conversation_element: The conversation list item element
+
+        Returns:
+            Datetime object or None if extraction fails
+        """
+        try:
+            # Selectors for timestamp in conversation list items
+            # LinkedIn shows timestamps like "5d", "Feb 6", "viernes", etc.
+            time_selectors = [
+                'time[class*="msg-conversation-listitem__time-stamp"]',
+                'time[class*="time-stamp"]',
+                'span[class*="msg-conversation-listitem__time-stamp"]',
+                'span[class*="time-stamp"]',
+                '[class*="msg-conversation-card__time-stamp"]',
+                "time",
+            ]
+
+            for selector in time_selectors:
+                try:
+                    time_element = await conversation_element.query_selector(selector)
+                    if time_element:
+                        # First try datetime attribute (ISO format)
+                        datetime_attr = await time_element.get_attribute("datetime")
+                        if datetime_attr:
+                            try:
+                                parsed = datetime.fromisoformat(
+                                    datetime_attr.replace("Z", "+00:00")
+                                )
+                                logger.debug(
+                                    "list_timestamp_from_datetime_attr",
+                                    selector=selector,
+                                    datetime_attr=datetime_attr,
+                                )
+                                return parsed
+                            except ValueError:
+                                pass
+
+                        # Parse the visible text (e.g., "5d", "Feb 6", "viernes")
+                        time_text = await time_element.inner_text()
+                        if time_text and time_text.strip():
+                            parsed = parse_relative_timestamp(time_text)
+                            logger.info(
+                                "list_timestamp_extracted",
+                                selector=selector,
+                                time_text=time_text.strip(),
+                                parsed=parsed.isoformat(),
+                            )
+                            return parsed
+                except Exception as e:
+                    logger.debug(
+                        "list_timestamp_selector_failed",
+                        selector=selector,
+                        error=str(e),
+                    )
+                    continue
+
+            logger.warning("list_timestamp_not_found")
+            return None
+
+        except Exception as e:
+            logger.warning("list_timestamp_extraction_error", error=str(e))
+            return None
+
+    async def _extract_message_from_conversation(
+        self, page: Page, list_timestamp: datetime | None = None
+    ) -> LinkedInMessage | None:
         """
         Extract message details from the currently open conversation.
 
         Args:
             page: Playwright page
+            list_timestamp: Optional timestamp extracted from conversation list
+                           (used as primary source, more reliable than message history)
 
         Returns:
             LinkedInMessage or None if extraction fails
@@ -601,69 +799,87 @@ class LinkedInScraper:
                 '[class*="msg-s-event-listitem__timestamp"]',
             ]
 
-            message_timestamp = datetime.now()  # Default fallback
-            for selector in timestamp_selectors:
-                try:
-                    time_element = await last_message.query_selector(selector)
-                    if time_element:
-                        # First try to get datetime attribute (ISO format)
-                        datetime_attr = await time_element.get_attribute("datetime")
-                        if datetime_attr:
-                            try:
-                                message_timestamp = datetime.fromisoformat(
-                                    datetime_attr.replace("Z", "+00:00")
-                                )
-                                logger.debug(
-                                    "timestamp_from_datetime_attr",
-                                    selector=selector,
-                                    datetime_attr=datetime_attr,
-                                )
-                                break
-                            except ValueError:
-                                pass
+            timestamp_fallback = datetime.now()  # Store fallback timestamp
+            message_timestamp = timestamp_fallback  # Default to fallback
+            timestamp_found = False
 
-                        # Fallback: parse the text content as relative time
-                        time_text = await time_element.inner_text()
-                        if time_text:
-                            message_timestamp = parse_relative_timestamp(time_text)
-                            logger.debug(
-                                "timestamp_from_text",
-                                selector=selector,
-                                time_text=time_text,
-                                parsed=message_timestamp.isoformat(),
-                            )
-                            break
-                except Exception as e:
-                    logger.debug("timestamp_extraction_failed", selector=selector, error=str(e))
-                    continue
-
-            # If no timestamp found in message, try conversation header
-            if message_timestamp == datetime.now():
-                header_time_selectors = [
-                    "header time",
-                    'div[class*="conversation-header"] time',
-                    'div[class*="msg-thread"] time',
-                ]
-                for selector in header_time_selectors:
+            # PRIORITY 1: Use list_timestamp if available (most reliable)
+            # This comes from the conversation list panel, which shows accurate dates
+            if list_timestamp:
+                message_timestamp = list_timestamp
+                timestamp_found = True
+                logger.info(
+                    "timestamp_from_conversation_list",
+                    timestamp=message_timestamp.isoformat(),
+                )
+            else:
+                # PRIORITY 2: Try to extract from message history (less reliable)
+                for selector in timestamp_selectors:
                     try:
-                        time_element = await page.query_selector(selector)
+                        time_element = await last_message.query_selector(selector)
                         if time_element:
+                            # First try to get datetime attribute (ISO format)
+                            datetime_attr = await time_element.get_attribute("datetime")
+                            if datetime_attr:
+                                try:
+                                    message_timestamp = datetime.fromisoformat(
+                                        datetime_attr.replace("Z", "+00:00")
+                                    )
+                                    timestamp_found = True
+                                    logger.debug(
+                                        "timestamp_from_datetime_attr",
+                                        selector=selector,
+                                        datetime_attr=datetime_attr,
+                                    )
+                                    break
+                                except ValueError:
+                                    pass
+
+                            # Fallback: parse the text content as relative time
                             time_text = await time_element.inner_text()
                             if time_text:
                                 message_timestamp = parse_relative_timestamp(time_text)
+                                timestamp_found = True
                                 logger.debug(
-                                    "timestamp_from_header",
+                                    "timestamp_from_text",
                                     selector=selector,
                                     time_text=time_text,
+                                    parsed=message_timestamp.isoformat(),
                                 )
                                 break
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("timestamp_extraction_failed", selector=selector, error=str(e))
                         continue
+
+                # PRIORITY 3: If no timestamp found in message, try conversation header
+                if not timestamp_found:
+                    header_time_selectors = [
+                        "header time",
+                        'div[class*="conversation-header"] time',
+                        'div[class*="msg-thread"] time',
+                    ]
+                    for selector in header_time_selectors:
+                        try:
+                            time_element = await page.query_selector(selector)
+                            if time_element:
+                                time_text = await time_element.inner_text()
+                                if time_text:
+                                    message_timestamp = parse_relative_timestamp(time_text)
+                                    timestamp_found = True
+                                    logger.debug(
+                                        "timestamp_from_header",
+                                        selector=selector,
+                                        time_text=time_text,
+                                    )
+                                    break
+                        except Exception:
+                            continue
 
             logger.info(
                 "message_timestamp_extracted",
                 timestamp=message_timestamp.isoformat(),
-                is_fallback=(message_timestamp.date() == datetime.now().date()),
+                source="list" if list_timestamp else ("found" if timestamp_found else "fallback"),
+                is_fallback=not timestamp_found and not list_timestamp,
             )
 
             # Create message object

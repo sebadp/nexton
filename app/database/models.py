@@ -138,6 +138,11 @@ class Opportunity(Base):
         TIMESTAMP(timezone=True),
         nullable=True,
     )
+    message_timestamp: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        comment="Original timestamp from LinkedIn message",
+    )
 
     # Additional metadata
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -199,6 +204,9 @@ class Opportunity(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "message_timestamp": self.message_timestamp.isoformat()
+            if self.message_timestamp
+            else None,
             "processing_time_ms": self.processing_time_ms,
         }
 

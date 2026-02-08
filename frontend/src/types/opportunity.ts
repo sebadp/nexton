@@ -63,6 +63,7 @@ export interface Opportunity {
   processing_time_ms: number | null
   created_at: string
   updated_at: string
+  message_timestamp: string | null
 
   // New classification fields
   conversation_state: ConversationState | null
