@@ -133,9 +133,15 @@ class OpportunityResponse(BaseModel):
     @classmethod
     def validate_message_timestamp(cls, v: datetime | None) -> datetime | None:
         """Ensure message_timestamp is not a future date."""
-        if v is not None and v > datetime.now():
-            # If somehow a future date slipped through, cap it to now
-            return datetime.now()
+        if v is not None:
+            # Handle timezone awareness for comparison
+            # If v is offset-aware, we must compare with offset-aware now (in same tz)
+            # If v is offset-naive, we compare with offset-naive now
+            now = datetime.now(v.tzinfo) if v.tzinfo else datetime.now()
+
+            if v > now:
+                # If somehow a future date slipped through, cap it to now
+                return now
         return v
 
     class Config:

@@ -106,11 +106,18 @@ class MessageAnalysisSignature(dspy.Signature):
     """
 
     # Input
-    message: str = dspy.InputField(desc="Raw LinkedIn message from recruiter")
+    message: str = dspy.InputField(
+        desc="Full conversation history or raw message text. Format: [Sender]: Message..."
+    )
 
     # Outputs
-    company: str = dspy.OutputField(desc="Company name mentioned in the message")
-    role: str = dspy.OutputField(desc="Job role/title mentioned (e.g., 'Senior Backend Engineer')")
+    company: str = dspy.OutputField(
+        desc="""Company name mentioned in the message. If NOT mentioned, return 'Unknown Company'.
+        CRITICAL: Do NOT extract platform names like 'Microsoft' (from Teams links), 'Google' (from Meet links), 'Zoom', 'Calendly', or generic tools unless explicitly stated as the employer."""
+    )
+    role: str = dspy.OutputField(
+        desc="Job role/title mentioned (e.g., 'Senior Backend Engineer'). If NOT mentioned, return 'Unknown Role'."
+    )
     seniority: str = dspy.OutputField(
         desc="Seniority level: Junior, Mid, Senior, Staff, Principal, or Unknown"
     )

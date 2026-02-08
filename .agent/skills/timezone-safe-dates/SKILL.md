@@ -32,6 +32,27 @@ def parse_date_safely(date_string: str) -> datetime:
     return parsed
 ```
 
+## Comparing Datetimes
+
+When comparing datetimes (e.g., `if message_time > now`), ensure both are either offset-naive or offset-aware. Mixing them raises `TypeError`.
+
+**Best Practice:**
+If the stored datetime is timezone-aware (has `tzinfo`), compare it with `datetime.now(tz=stored_dt.tzinfo)`.
+
+```python
+from datetime import datetime
+
+def validate_timestamp(v: datetime | None) -> datetime | None:
+    if v is not None:
+        # Handle timezone awareness for comparison
+        # if v is offset-aware, get 'now' in the same timezone
+        now = datetime.now(v.tzinfo) if v.tzinfo else datetime.now()
+
+        if v > now:
+            return now
+    return v
+```
+
 ## When to Apply This
 
 Apply noon normalization when:
