@@ -244,8 +244,8 @@ class MessageAnalyzer(dspy.Module):
 
             # Create structured result
             extracted = ExtractedData(
-                company=prediction.company or "Unknown",
-                role=prediction.role or "Unknown Role",
+                company=self._normalize_company(prediction.company),
+                role=self._normalize_role(prediction.role),
                 seniority=self._normalize_seniority(prediction.seniority),
                 tech_stack=tech_stack,
                 salary_min=salary_min,
@@ -385,6 +385,74 @@ class MessageAnalyzer(dspy.Module):
             return "Onsite"
         else:
             return "Unknown"
+
+    def _normalize_company(self, company: str) -> str:
+        """
+        Normalize company name, handling N/A or unknown values.
+
+        Args:
+            company: Raw company string
+
+        Returns:
+            str: Normalized company name
+        """
+        if not company:
+            return "Unknown Company"
+
+        company_clean = company.strip()
+        company_lower = company_clean.lower()
+
+        # List of strings that indicate unknown company
+        unknown_indicators = [
+            "n/a",
+            "unknown",
+            "not mentioned",
+            "not specified",
+            "none",
+            "no company",
+            "confidential",
+            # Common false positives from meeting links/tools
+            "microsoft",  # from teams.microsoft.com
+            "google",  # from meet.google.com
+            "zoom",  # from zoom.us
+            "calendly",  # from calendly.com
+        ]
+
+        if company_lower in unknown_indicators:
+            return "Unknown Company"
+
+        return company_clean
+
+    def _normalize_role(self, role: str) -> str:
+        """
+        Normalize role name, handling N/A or unknown values.
+
+        Args:
+            role: Raw role string
+
+        Returns:
+            str: Normalized role name
+        """
+        if not role:
+            return "Unknown Role"
+
+        role_clean = role.strip()
+        role_lower = role_clean.lower()
+
+        # List of strings that indicate unknown role
+        unknown_indicators = [
+            "n/a",
+            "unknown",
+            "not mentioned",
+            "not specified",
+            "none",
+            "no role",
+        ]
+
+        if role_lower in unknown_indicators:
+            return "Unknown Role"
+
+        return role_clean
 
 
 class FollowUpAnalyzer(dspy.Module):
