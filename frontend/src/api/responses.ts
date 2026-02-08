@@ -11,8 +11,12 @@ export async function getPendingResponses(
   return response.data
 }
 
-export async function getResponse(opportunityId: number): Promise<PendingResponse> {
+export async function getResponse(opportunityId: number): Promise<PendingResponse | null> {
   const response = await apiClient.get<PendingResponse>(`/responses/${opportunityId}`)
+  // Backend returns 204 No Content if no pending response
+  if (response.status === 204) {
+    return null
+  }
   return response.data
 }
 

@@ -265,7 +265,7 @@ class OpportunityRepository(BaseRepository):
 
     async def delete(self, opportunity_id: int) -> None:
         """
-        Delete an opportunity.
+        Delete an opportunity and its pending responses.
 
         Args:
             opportunity_id: Opportunity ID
@@ -275,7 +275,10 @@ class OpportunityRepository(BaseRepository):
             DatabaseError: If delete fails
         """
         try:
+            # First verify the opportunity exists
             opportunity = await self.get_by_id(opportunity_id)
+
+            # Delete the opportunity (DB CASCADE handles pending_responses)
             await self.session.delete(opportunity)
             await self.session.flush()
 
@@ -339,62 +342,90 @@ class OpportunityRepository(BaseRepository):
 
     async def get_stats(self) -> dict:
         """
-        Get aggregate statistics.
+        Get aggregate statistics using optimized GROUP BY queries.
 
         Returns:
             dict: Statistics about opportunities
         """
         try:
-            # Total count
-            total = await self.count()
-
-            # Count by tier
-            tier_stats = {}
-            for tier in ["HIGH_PRIORITY", "INTERESANTE", "POCO_INTERESANTE", "NO_INTERESA"]:
-                tier_stats[tier] = await self.count(tier=tier)
-
-            # Average, highest, lowest scores
-            result = await self.session.execute(
+            # Query 1: Total count + score aggregates (combines 2 queries into 1)
+            agg_result = await self.session.execute(
                 select(
-                    func.avg(Opportunity.total_score),
+                    func.count(Opportunity.id),
+                    func.avg(Opportunity.total_score).filter(Opportunity.total_score.is_not(None)),
                     func.max(Opportunity.total_score),
                     func.min(Opportunity.total_score),
-                ).where(Opportunity.total_score.is_not(None))
-            )
-            row = result.one()
-            avg_score = row[0] or 0
-            highest_score = row[1]
-            lowest_score = row[2]
-
-            # Count by status
-            status_stats = {}
-            for status in ["new", "processing", "processed", "error", "archived"]:
-                status_stats[status] = await self.count(status=status)
-
-            # Count by conversation state (NEW)
-            conversation_state_stats = {}
-            for state in ["NEW_OPPORTUNITY", "FOLLOW_UP", "COURTESY_CLOSE"]:
-                query = select(func.count(Opportunity.id)).where(
-                    Opportunity.conversation_state == state
                 )
-                result = await self.session.execute(query)
-                conversation_state_stats[state] = result.scalar_one()
-
-            # Count by processing status (NEW)
-            processing_status_stats = {}
-            for pstatus in ["processed", "ignored", "declined", "manual_review", "auto_responded"]:
-                query = select(func.count(Opportunity.id)).where(
-                    Opportunity.processing_status == pstatus
-                )
-                result = await self.session.execute(query)
-                processing_status_stats[pstatus] = result.scalar_one()
-
-            # Count pending manual review (NEW)
-            manual_review_query = select(func.count(Opportunity.id)).where(
-                Opportunity.requires_manual_review == True  # noqa: E712
             )
-            manual_review_result = await self.session.execute(manual_review_query)
-            pending_manual_review = manual_review_result.scalar_one()
+            agg_row = agg_result.one()
+            total = agg_row[0]
+            avg_score = agg_row[1] or 0
+            highest_score = agg_row[2]
+            lowest_score = agg_row[3]
+
+            # Query 2: Count by tier (1 query instead of 4)
+            tier_result = await self.session.execute(
+                select(Opportunity.tier, func.count(Opportunity.id)).group_by(Opportunity.tier)
+            )
+            tier_stats = {
+                tier: 0
+                for tier in [
+                    "HIGH_PRIORITY",
+                    "INTERESANTE",
+                    "POCO_INTERESANTE",
+                    "NO_INTERESA",
+                ]
+            }
+            for tier, count in tier_result:
+                if tier in tier_stats:
+                    tier_stats[tier] = count
+
+            # Query 3: Count by status (1 query instead of 5)
+            status_result = await self.session.execute(
+                select(Opportunity.status, func.count(Opportunity.id)).group_by(Opportunity.status)
+            )
+            status_stats = {s: 0 for s in ["new", "processing", "processed", "error", "archived"]}
+            for status, count in status_result:
+                if status in status_stats:
+                    status_stats[status] = count
+
+            # Query 4: Count by conversation_state (1 query instead of 3)
+            conv_result = await self.session.execute(
+                select(Opportunity.conversation_state, func.count(Opportunity.id)).group_by(
+                    Opportunity.conversation_state
+                )
+            )
+            conversation_state_stats = {
+                s: 0 for s in ["NEW_OPPORTUNITY", "FOLLOW_UP", "COURTESY_CLOSE"]
+            }
+            for state, count in conv_result:
+                if state in conversation_state_stats:
+                    conversation_state_stats[state] = count
+
+            # Query 5: Count by processing_status + manual_review (1 query instead of 6)
+            proc_result = await self.session.execute(
+                select(
+                    Opportunity.processing_status,
+                    Opportunity.requires_manual_review,
+                    func.count(Opportunity.id),
+                ).group_by(Opportunity.processing_status, Opportunity.requires_manual_review)
+            )
+            processing_status_stats = {
+                s: 0
+                for s in [
+                    "processed",
+                    "ignored",
+                    "declined",
+                    "manual_review",
+                    "auto_responded",
+                ]
+            }
+            pending_manual_review = 0
+            for pstatus, manual_review, count in proc_result:
+                if pstatus in processing_status_stats:
+                    processing_status_stats[pstatus] += count
+                if manual_review:
+                    pending_manual_review += count
 
             return {
                 "total_count": total,

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ENV: Literal["development", "staging", "production", "test"] = "development"
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
+    LITE_MODE: bool = False  # Set to True in docker-compose.lite.yml
 
     # API
     API_V1_PREFIX: str = "/api/v1"
@@ -150,6 +151,14 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [host.strip() for host in v.split(",")]
         return v
+
+    @field_validator("SMTP_PORT", mode="before")
+    @classmethod
+    def parse_smtp_port(cls, v: str | int | None) -> int:
+        """Handle empty SMTP_PORT value."""
+        if v is None or v == "":
+            return 1025  # Default value
+        return int(v)
 
     @property
     def is_production(self) -> bool:

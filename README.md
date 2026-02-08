@@ -13,21 +13,28 @@ Automate your LinkedIn job search with enterprise-grade AI. Analyze recruiter me
 
 ---
 
-## 🎯 Choose Your Version
-
-| Version | Best For | Infrastructure |
-|---------|----------|----------------|
-| **[Full Version](#-quick-start)** | Production, teams, full observability | PostgreSQL, Redis, Celery, Docker |
-| **[Lite Version](docs/TESTING_GUIDE.md#lite-version-no-infrastructure)** | Quick testing, low resources, learning | Just Python + LLM |
-
-**New here?** Start with the Full Version - includes a modern web dashboard!
+## 🎯 Quick Start
 
 ```bash
-# Full Version - Start in 3 commands
 git clone <repository-url> && cd nexton
-cp .env.example .env  # Edit with your LinkedIn credentials
-docker-compose up -d  # Open http://localhost:3000
+
+# Choose one:
+make start-lite  # Lite: backend + frontend + postgres (~500MB RAM)
+make start       # Full: all services including Celery, Redis (~2GB RAM)
 ```
+
+**That's it!** Open http://localhost:3000
+
+### Version Comparison
+
+| Command | Services | Features | RAM |
+|---------|----------|----------|-----|
+| `make start-lite` | 3 (postgres, backend, frontend) | Manual scraping, no emails | ~500MB |
+| `make start` | 8 (+ Redis, Celery, Mailpit, Flower) | Scheduled jobs, emails, monitoring | ~2GB |
+
+> **Note**: Both versions require editing `.env` with your LinkedIn credentials. The `make start*` commands auto-create it from `.env.example`.
+>
+> For running **without Docker**, see [Lite Version without Docker](docs/TESTING_GUIDE.md#lite-version-no-infrastructure)
 
 ### Web Dashboard Preview
 

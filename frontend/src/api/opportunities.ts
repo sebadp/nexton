@@ -50,7 +50,8 @@ export async function updateOpportunity(id: number, data: UpdateOpportunityReque
 }
 
 export async function deleteOpportunity(id: number): Promise<void> {
-  await apiClient.delete(`/opportunities/${id}`)
+  // force=true because user has already confirmed deletion in the UI dialog
+  await apiClient.delete(`/opportunities/${id}?force=true`)
 }
 
 export async function getManualReviewQueue(

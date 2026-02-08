@@ -5,8 +5,9 @@ Scrapes LinkedIn messages with rate limiting and retry logic.
 """
 
 import asyncio
+import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -18,6 +19,77 @@ from app.scraper.rate_limiter import AdaptiveRateLimiter, RateLimitConfig
 from app.scraper.session_manager import SessionManager
 
 logger = get_logger(__name__)
+
+
+def parse_relative_timestamp(relative_time: str) -> datetime:
+    """
+    Parse LinkedIn's relative timestamp format to a datetime object.
+
+    LinkedIn uses formats like:
+    - "2h" or "2 hr" (hours ago)
+    - "3d" (days ago)
+    - "1w" (weeks ago)
+    - "1mo" (months ago)
+    - "Just now" / "Ahora" (now)
+    - "Yesterday" / "Ayer"
+
+    Args:
+        relative_time: The relative time string from LinkedIn
+
+    Returns:
+        Datetime object representing the parsed time
+    """
+    now = datetime.now()
+    relative_time = relative_time.strip().lower()
+
+    # Handle "just now" / "ahora" variations
+    if relative_time in ["just now", "ahora", "now", "hace un momento"]:
+        return now
+
+    # Handle "yesterday" / "ayer"
+    if relative_time in ["yesterday", "ayer"]:
+        return now - timedelta(days=1)
+
+    # Patterns for relative times (English and Spanish)
+    # Match patterns like: "2h", "2 h", "2h ago", "2 hours ago", "hace 2 h"
+    patterns = [
+        # English patterns
+        (r"(\d+)\s*(?:h|hr|hour|hours?)(?:\s*ago)?", "hours"),
+        (r"(\d+)\s*(?:d|day|days?)(?:\s*ago)?", "days"),
+        (r"(\d+)\s*(?:w|wk|week|weeks?)(?:\s*ago)?", "weeks"),
+        (r"(\d+)\s*(?:mo|month|months?)(?:\s*ago)?", "months"),
+        (r"(\d+)\s*(?:m|min|mins|minute|minutes?)(?:\s*ago)?", "minutes"),
+        (r"(\d+)\s*(?:s|sec|secs|second|seconds?)(?:\s*ago)?", "seconds"),
+        # Spanish patterns (hace X ...)
+        (r"hace\s*(\d+)\s*(?:h|hr|hora|horas?)", "hours"),
+        (r"hace\s*(\d+)\s*(?:d|día|dias?|días?)", "days"),
+        (r"hace\s*(\d+)\s*(?:sem|semana|semanas?)", "weeks"),
+        (r"hace\s*(\d+)\s*(?:mes|meses?)", "months"),
+        (r"hace\s*(\d+)\s*(?:m|min|minuto|minutos?)", "minutes"),
+        (r"hace\s*(\d+)\s*(?:s|seg|segundo|segundos?)", "seconds"),
+    ]
+
+    for pattern, unit in patterns:
+        match = re.search(pattern, relative_time, re.IGNORECASE)
+        if match:
+            value = int(match.group(1))
+            if unit == "seconds":
+                return now - timedelta(seconds=value)
+            elif unit == "minutes":
+                return now - timedelta(minutes=value)
+            elif unit == "hours":
+                return now - timedelta(hours=value)
+            elif unit == "days":
+                return now - timedelta(days=value)
+            elif unit == "weeks":
+                return now - timedelta(weeks=value)
+            elif unit == "months":
+                # Approximate: 30 days per month
+                return now - timedelta(days=value * 30)
+
+    # If no pattern matched, log and return now
+    logger.warning("failed_to_parse_relative_time", relative_time=relative_time)
+    return now
 
 
 @dataclass
@@ -517,11 +589,88 @@ class LinkedInScraper:
             # Get conversation URL
             conversation_url = page.url
 
+            # Extract timestamp from message - try multiple selectors
+            timestamp_selectors = [
+                'time[class*="msg-s-message-list__time-heading"]',
+                'time[class*="time-ago"]',
+                "time[datetime]",
+                'span[class*="msg-s-message-list__time-heading"]',
+                'span[class*="time-stamp"]',
+                'span[class*="timestamp"]',
+                'span[class*="time-ago"]',
+                '[class*="msg-s-event-listitem__timestamp"]',
+            ]
+
+            message_timestamp = datetime.now()  # Default fallback
+            for selector in timestamp_selectors:
+                try:
+                    time_element = await last_message.query_selector(selector)
+                    if time_element:
+                        # First try to get datetime attribute (ISO format)
+                        datetime_attr = await time_element.get_attribute("datetime")
+                        if datetime_attr:
+                            try:
+                                message_timestamp = datetime.fromisoformat(
+                                    datetime_attr.replace("Z", "+00:00")
+                                )
+                                logger.debug(
+                                    "timestamp_from_datetime_attr",
+                                    selector=selector,
+                                    datetime_attr=datetime_attr,
+                                )
+                                break
+                            except ValueError:
+                                pass
+
+                        # Fallback: parse the text content as relative time
+                        time_text = await time_element.inner_text()
+                        if time_text:
+                            message_timestamp = parse_relative_timestamp(time_text)
+                            logger.debug(
+                                "timestamp_from_text",
+                                selector=selector,
+                                time_text=time_text,
+                                parsed=message_timestamp.isoformat(),
+                            )
+                            break
+                except Exception as e:
+                    logger.debug("timestamp_extraction_failed", selector=selector, error=str(e))
+                    continue
+
+            # If no timestamp found in message, try conversation header
+            if message_timestamp == datetime.now():
+                header_time_selectors = [
+                    "header time",
+                    'div[class*="conversation-header"] time',
+                    'div[class*="msg-thread"] time',
+                ]
+                for selector in header_time_selectors:
+                    try:
+                        time_element = await page.query_selector(selector)
+                        if time_element:
+                            time_text = await time_element.inner_text()
+                            if time_text:
+                                message_timestamp = parse_relative_timestamp(time_text)
+                                logger.debug(
+                                    "timestamp_from_header",
+                                    selector=selector,
+                                    time_text=time_text,
+                                )
+                                break
+                    except Exception:
+                        continue
+
+            logger.info(
+                "message_timestamp_extracted",
+                timestamp=message_timestamp.isoformat(),
+                is_fallback=(message_timestamp.date() == datetime.now().date()),
+            )
+
             # Create message object
             message = LinkedInMessage(
                 sender_name=sender_name.strip(),
                 message_text=message_text.strip(),
-                timestamp=datetime.now(),  # LinkedIn doesn't always show exact timestamps
+                timestamp=message_timestamp,
                 conversation_url=conversation_url,
                 is_read=False,
                 is_from_user=is_from_user,

@@ -19,6 +19,8 @@ export function useResponse(opportunityId: number) {
     queryKey: ["response", opportunityId],
     queryFn: () => getResponse(opportunityId),
     enabled: !!opportunityId,
+    retry: false, // Don't retry on 404
+    staleTime: 30000, // Cache for 30 seconds
   })
 }
 

@@ -411,10 +411,16 @@ async def get_opportunity(
     "/{opportunity_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete opportunity",
-    description="Delete an opportunity by its ID",
+    description="Delete an opportunity by its ID. Use force=true to delete even if pending responses exist.",
+    responses={
+        409: {
+            "description": "Opportunity has pending response, use force=true to confirm deletion"
+        },
+    },
 )
 async def delete_opportunity(
     opportunity_id: int,
+    force: bool = Query(False, description="Force delete even if pending responses exist"),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """
@@ -422,16 +428,35 @@ async def delete_opportunity(
 
     Args:
         opportunity_id: Opportunity ID to delete
+        force: If True, delete even if pending responses exist
         db: Database session
 
     Raises:
         HTTPException 404: If opportunity not found
+        HTTPException 409: If pending response exists and force=false
     """
-    logger.info("delete_opportunity_request", opportunity_id=opportunity_id)
+    logger.info("delete_opportunity_request", opportunity_id=opportunity_id, force=force)
 
     try:
         repo = OpportunityRepository(db)
+
+        # If not force, check for pending responses first
+        if not force:
+            response_repo = PendingResponseRepository(db)
+            pending = await response_repo.get_by_opportunity_id(opportunity_id)
+            if pending:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": "Opportunity has pending response",
+                        "response_id": pending.id,
+                        "response_status": pending.status,
+                        "response_preview": (pending.original_response or "")[:100],
+                    },
+                )
+
         await repo.delete(opportunity_id)
+        await db.commit()  # Persist the deletion!
         return None
 
     except OpportunityNotFoundError as e:

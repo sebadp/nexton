@@ -257,7 +257,12 @@ async def decline_response(
         ) from e
 
 
-@router.get("/{opportunity_id}", response_model=ResponseData, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{opportunity_id}",
+    response_model=ResponseData | None,
+    status_code=status.HTTP_200_OK,
+    responses={204: {"description": "No pending response for this opportunity"}},
+)
 async def get_response(
     opportunity_id: int,
     repository: PendingResponseRepository = Depends(get_pending_response_repository),
@@ -270,18 +275,14 @@ async def get_response(
         repository: Response repository
 
     Returns:
-        Response data
-
-    Raises:
-        HTTPException: If response not found
+        Response data or 204 if no pending response
     """
     pending_response = await repository.get_by_opportunity_id(opportunity_id)
 
     if not pending_response:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No pending response found for opportunity {opportunity_id}",
-        )
+        from fastapi.responses import Response
+
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return ResponseData(**pending_response.to_dict())
 

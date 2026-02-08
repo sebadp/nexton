@@ -1,0 +1,121 @@
+# =============================================================================
+# LinkedIn Agent - Docker Lite Version
+# =============================================================================
+#
+# Versión simplificada con solo 3 servicios: PostgreSQL + Backend + Frontend
+# Sin Redis, Celery, Mailpit ni monitoring.
+#
+# Uso:
+#   cp .env.example .env  # Configurar credenciales
+#   docker-compose -f docker-compose.lite.yml up -d
+#   open http://localhost:3000
+#
+# Trade-offs vs Full Version:
+#   ❌ Sin background jobs (scraping solo manual desde el dashboard)
+#   ❌ Sin email notifications
+#   ❌ Sin caching Redis (más llamadas LLM)
+#   ✅ Mucho menor uso de recursos (~500MB vs ~2GB RAM)
+#   ✅ Setup más simple
+#
+# =============================================================================
+
+services:
+  # ==========================================
+  # DATABASE
+  # ==========================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: linkedin-agent-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      POSTGRES_DB: ${POSTGRES_DB:-linkedin_agent}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_lite:/var/lib/postgresql/data
+    networks:
+      - linkedin-lite-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-linkedin_agent}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================
+  # BACKEND (FastAPI)
+  # ==========================================
+
+  app:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    container_name: linkedin-agent-app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=${ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LITE_MODE=true
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
+      # Redis deshabilitado - usamos valores dummy para que no crashee
+      - REDIS_URL=
+      - REDIS_ENABLED=false
+      # Celery deshabilitado
+      - CELERY_BROKER_URL=
+      - CELERY_ENABLED=false
+      # LLM - usa Ollama local o API keys
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-llama3.1}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Email deshabilitado (usará defaults de la config)
+      - EMAIL_ENABLED=false
+      # LinkedIn credentials
+      - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
+      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+      # Observability deshabilitado
+      - OTEL_ENABLED=false
+      - PROFILE_PATH=/app/config/profile.yaml
+    volumes:
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+    networks:
+      - linkedin-lite-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================
+  # FRONTEND (React + Nginx)
+  # ==========================================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: linkedin-agent-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - linkedin-lite-network
+    depends_on:
+      - app
+    restart: unless-stopped
+
+# ==========================================
+# NETWORKS & VOLUMES
+# ==========================================
+
+networks:
+  linkedin-lite-network:
+    driver: bridge
+
+volumes:
+  postgres_data_lite:

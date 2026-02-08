@@ -375,3 +375,63 @@ reset:  ## Reset everything (clean + setup + up)
 	$(MAKE) clean
 	$(MAKE) setup
 	$(MAKE) up
+
+# ==========================================
+# SIMPLE START COMMANDS
+# ==========================================
+
+start:  ## Start full version (all services)
+	@if [ ! -f .env ]; then cp .env.example .env && echo "📋 Created .env from .env.example - please edit it"; fi
+	@echo "🚀 Starting FULL version..."
+	docker-compose up -d
+	@echo ""
+	@echo "✅ Full version started!"
+	@echo "   Frontend:  http://localhost:3000"
+	@echo "   API:       http://localhost:8000"
+	@echo "   API Docs:  http://localhost:8000/docs"
+	@echo "   Mailpit:   http://localhost:8025"
+	@echo "   Flower:    http://localhost:5555"
+
+start-lite:  ## Start lite version (backend + frontend + postgres only)
+	@if [ ! -f .env ]; then cp .env.example .env && echo "📋 Created .env from .env.example - please edit it"; fi
+	@echo "🚀 Starting LITE version..."
+	docker-compose -f docker-compose.lite.yml up -d
+	@echo ""
+	@echo "✅ Lite version started!"
+	@echo "   Frontend:  http://localhost:3000"
+	@echo "   API:       http://localhost:8000"
+	@echo "   API Docs:  http://localhost:8000/docs"
+
+stop:  ## Stop all services (full or lite)
+	@echo "🛑 Stopping services..."
+	-docker-compose down 2>/dev/null
+	-docker-compose -f docker-compose.lite.yml down 2>/dev/null
+	@echo "✅ Services stopped!"
+
+start-logs:  ## Start full version with logs (foreground)
+	@if [ ! -f .env ]; then cp .env.example .env && echo "📋 Created .env from .env.example - please edit it"; fi
+	@echo "🚀 Starting FULL version with logs..."
+	docker-compose up
+
+start-lite-logs:  ## Start lite version with logs (foreground)
+	@if [ ! -f .env ]; then cp .env.example .env && echo "📋 Created .env from .env.example - please edit it"; fi
+	@echo "🚀 Starting LITE version with logs..."
+	docker-compose -f docker-compose.lite.yml up
+
+rebuild-lite:  ## Rebuild and restart all lite services
+	@echo "🔄 Rebuilding all LITE services..."
+	docker-compose -f docker-compose.lite.yml build
+	docker-compose -f docker-compose.lite.yml up -d
+	@echo "✅ Lite services rebuilt and restarted!"
+
+rebuild-lite-frontend:  ## Rebuild and restart frontend only (lite)
+	@echo "🔄 Rebuilding frontend..."
+	docker-compose -f docker-compose.lite.yml build frontend
+	docker-compose -f docker-compose.lite.yml up -d frontend
+	@echo "✅ Frontend rebuilt and restarted!"
+
+rebuild-lite-backend:  ## Rebuild and restart backend only (lite)
+	@echo "🔄 Rebuilding backend..."
+	docker-compose -f docker-compose.lite.yml build app
+	docker-compose -f docker-compose.lite.yml up -d app
+	@echo "✅ Backend rebuilt and restarted!"

@@ -16,7 +16,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 
 from app.database.base import Base
 
@@ -269,7 +269,10 @@ class PendingResponse(Base):
     )
 
     # Relationships
-    opportunity: Mapped["Opportunity"] = relationship("Opportunity", backref="pending_responses")
+    opportunity: Mapped["Opportunity"] = relationship(
+        "Opportunity",
+        backref=backref("pending_responses", passive_deletes=True),
+    )
 
     # Indexes for performance
     __table_args__ = (

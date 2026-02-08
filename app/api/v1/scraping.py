@@ -60,8 +60,12 @@ async def trigger_scraping(
     2. Process each message through the DSPy pipeline
     3. Create opportunities in the database
     4. Optionally send email summary (disabled by default)
+
+    In LITE_MODE, runs synchronously without Celery/Redis.
     """
     global _scraping_state
+
+    from app.core.config import settings
 
     if _scraping_state["is_running"]:
         raise HTTPException(
@@ -69,18 +73,75 @@ async def trigger_scraping(
             detail="Scraping is already in progress. Please wait for it to complete.",
         )
 
+    # Check if running in lite mode
+    if settings.LITE_MODE:
+        return await _trigger_lite_mode_scraping(request)
+
+    # Full mode: use Celery
+    return await _trigger_full_mode_scraping(request)
+
+
+async def _trigger_lite_mode_scraping(
+    request: ScrapingTriggerRequest,
+) -> ScrapingTriggerResponse:
+    """Trigger scraping in lite mode (synchronous, no Celery)."""
+    global _scraping_state
+
+    from app.database.base import get_db
+    from app.services.scraping_service import ScrapingService
+
+    _scraping_state["is_running"] = True
+    _scraping_state["current_task_id"] = "lite-mode-sync"
+
     try:
-        # Import here to avoid circular imports and allow lite mode
+        # Get database session
+        async for db in get_db():
+            service = ScrapingService(db)
+            result = await service.scrape_sync(
+                limit=request.limit,
+                unread_only=request.unread_only,
+            )
+
+            # Update state
+            _scraping_state["is_running"] = False
+            _scraping_state["last_run"] = datetime.utcnow().isoformat()
+            _scraping_state["last_run_status"] = result.get("status", "unknown")
+            _scraping_state["last_run_count"] = result.get("opportunities_created", 0)
+            _scraping_state["current_task_id"] = None
+
+            return ScrapingTriggerResponse(
+                task_id="lite-mode-sync",
+                status=result.get("status", "completed"),
+                message=result.get(
+                    "message",
+                    f"Lite mode scraping completed. Created {result.get('opportunities_created', 0)} opportunities.",
+                ),
+            )
+
+        # Should not reach here
+        raise HTTPException(status_code=500, detail="Failed to get database session")
+
+    except Exception as e:
+        _scraping_state["is_running"] = False
+        _scraping_state["current_task_id"] = None
+        raise HTTPException(status_code=500, detail=f"Lite mode scraping failed: {str(e)}") from e
+
+
+async def _trigger_full_mode_scraping(
+    request: ScrapingTriggerRequest,
+) -> ScrapingTriggerResponse:
+    """Trigger scraping in full mode (Celery background task)."""
+    global _scraping_state
+
+    try:
         from app.tasks.scraping_tasks import scrape_and_send_daily_summary, scrape_linkedin_messages
 
         _scraping_state["is_running"] = True
         _scraping_state["current_task_id"] = None
 
         if request.send_email:
-            # Use the full task with email
             task = scrape_and_send_daily_summary.delay()
         else:
-            # Use scraping without email
             task = scrape_linkedin_messages.delay(
                 limit=request.limit, unread_only=request.unread_only
             )
@@ -96,11 +157,16 @@ async def trigger_scraping(
     except ImportError:
         _scraping_state["is_running"] = False
         raise HTTPException(
-            status_code=503, detail="Celery tasks not available. Running in lite mode?"
+            status_code=503, detail="Celery not available. Check your configuration."
         ) from None
     except Exception as e:
         _scraping_state["is_running"] = False
-        raise HTTPException(status_code=500, detail=f"Failed to start scraping: {str(e)}") from e
+        error_msg = str(e)
+        if "Connection refused" in error_msg or "111" in error_msg:
+            raise HTTPException(
+                status_code=503, detail="Redis/Celery connection failed. Check your configuration."
+            ) from None
+        raise HTTPException(status_code=500, detail=f"Failed to start scraping: {error_msg}") from e
 
 
 @router.get("/status", response_model=ScrapingStatusResponse)

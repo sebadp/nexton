@@ -116,9 +116,24 @@ export default function OpportunityDetail() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Delete Opportunity</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this opportunity? This action
-                cannot be undone.
+              <DialogDescription asChild>
+                <div className="space-y-3">
+                  {response ? (
+                    <>
+                      <div className="p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-md">
+                        <p className="font-semibold text-orange-700 dark:text-orange-300 flex items-center gap-2">
+                          ⚠️ This opportunity has a {response.status} response:
+                        </p>
+                        <p className="mt-2 text-sm italic text-orange-600 dark:text-orange-400">
+                          "{response.original_response?.slice(0, 150)}..."
+                        </p>
+                      </div>
+                      <p>Deleting will also remove this response. This action cannot be undone.</p>
+                    </>
+                  ) : (
+                    <p>Are you sure you want to delete this opportunity? This action cannot be undone.</p>
+                  )}
+                </div>
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -133,7 +148,11 @@ export default function OpportunityDetail() {
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
               >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                {deleteMutation.isPending
+                  ? "Deleting..."
+                  : response
+                    ? "Delete Opportunity & Response"
+                    : "Delete"}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -179,7 +179,6 @@ class OpportunityService:
                     currency=pipeline_result.extracted.currency,
                     location=pipeline_result.extracted.location,
                     remote_policy=pipeline_result.extracted.remote_policy,
-                    job_type=pipeline_result.extracted.job_type,
                     # Scoring
                     tech_stack_score=pipeline_result.scoring.tech_stack_score,
                     salary_score=pipeline_result.scoring.salary_score,

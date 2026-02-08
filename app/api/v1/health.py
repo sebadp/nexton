@@ -127,7 +127,14 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
             logger.error("ollama_check", status="unhealthy", error=str(e))
 
     # Determine overall status
-    all_healthy = all(checks.values())
+    # In lite mode (no Redis configured), skip Redis from the required checks
+    required_checks = {"database": checks["database"]}
+    if settings.REDIS_URL:
+        required_checks["redis"] = checks["redis"]
+    if "ollama" in checks:
+        required_checks["ollama"] = checks["ollama"]
+
+    all_healthy = all(required_checks.values())
     status_code = status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
 
     details = {

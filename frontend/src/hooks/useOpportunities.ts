@@ -63,9 +63,11 @@ export function useDeleteOpportunity() {
 
   return useMutation({
     mutationFn: (id: number) => deleteOpportunity(id),
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["opportunities"] })
       queryClient.invalidateQueries({ queryKey: ["opportunityStats"] })
+      // Remove the response query for the deleted opportunity
+      queryClient.removeQueries({ queryKey: ["response", deletedId] })
     },
   })
 }
