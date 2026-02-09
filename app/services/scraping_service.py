@@ -4,6 +4,7 @@ Scraping service for lite mode.
 Provides synchronous scraping without Celery/Redis dependencies.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
@@ -278,12 +279,81 @@ class ScrapingService:
                 }
 
                 try:
-                    opportunity = await service.create_opportunity(
-                        recruiter_name=msg.sender_name,
-                        raw_message=msg.message_text,
-                        message_timestamp=msg.timestamp,
-                        use_cache=False,
+                    # Create queue for progress updates from threadpool
+                    queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
+                    loop = asyncio.get_running_loop()
+
+                    def on_progress(
+                        step: str,
+                        data: dict,
+                        loop: asyncio.AbstractEventLoop = loop,
+                        queue: asyncio.Queue[tuple[str, dict]] = queue,
+                    ) -> None:
+                        loop.call_soon_threadsafe(queue.put_nowait, (step, data))
+
+                    # Start opportunity creation in background task
+                    task = asyncio.create_task(
+                        service.create_opportunity(
+                            recruiter_name=msg.sender_name,
+                            raw_message=msg.message_text,
+                            message_timestamp=msg.timestamp,
+                            use_cache=False,
+                            on_progress=on_progress,
+                        )
                     )
+
+                    # Process progress events while task is running or queue has items
+                    while not task.done() or not queue.empty():
+                        try:
+                            # Wait for next event or small timeout
+                            # If task is done, don't wait long (queue.get will return immediately if has items)
+                            timeout = 0.1
+                            step_name, step_data = await asyncio.wait_for(
+                                queue.get(), timeout=timeout
+                            )
+
+                            # Map pipeline steps to user-friendly messages
+                            message_text = f"Analizando mensaje {i}/{len(messages)}..."
+
+                            if step_name == "conversation_state":
+                                message_text = "Analizando tipo de mensaje..."
+                            elif step_name == "extracting":
+                                message_text = "Extrayendo datos clave (Empresa, Rol)..."
+                            elif step_name == "extracted":
+                                company = step_data.get("company", "Unknown")
+                                role = step_data.get("role", "Unknown")
+                                message_text = f"Datos extraídos: {company} - {role}"
+                            elif step_name == "scoring":
+                                message_text = "Calculando relevancia y puntaje..."
+                            elif step_name == "scored":
+                                score = step_data.get("total_score", 0)
+                                message_text = f"Puntaje calculado: {score}/100"
+                            elif step_name == "filtering":
+                                message_text = "Verificando filtros obligatorios..."
+                            elif step_name == "filtered":
+                                message_text = "Filtros verificados."
+                            elif step_name == "drafting":
+                                message_text = "Generando borrador de respuesta..."
+                            elif step_name == "drafted":
+                                length = step_data.get("response_length", 0)
+                                message_text = f"Respuesta generada ({length} caracteres)."
+
+                            yield {
+                                "event": "progress",
+                                "step": "analyzing",
+                                "current": i,
+                                "total": len(messages),
+                                "message": message_text,
+                                "sender": msg.sender_name,
+                                "detail": step_data,
+                            }
+                        except asyncio.TimeoutError:
+                            if task.done():
+                                break
+                            continue
+
+                    # Get result or raise exception
+                    opportunity = await task
                     opportunities_created += 1
 
                     yield {

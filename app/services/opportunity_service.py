@@ -5,10 +5,11 @@ Business logic for opportunity management, integrating DSPy pipeline,
 caching, and database operations.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.cache import CacheKeys, RedisCache, generate_message_hash
 from app.core.exceptions import OpportunityNotFoundError, PipelineError
@@ -65,6 +66,7 @@ class OpportunityService:
         raw_message: str,
         message_timestamp: datetime | None = None,
         use_cache: bool = True,
+        on_progress: Callable[[str, dict], None] | None = None,
     ) -> Opportunity:
         """
         Create and process a new opportunity.
@@ -79,6 +81,7 @@ class OpportunityService:
             recruiter_name: Name of the recruiter
             raw_message: Raw message content
             use_cache: Whether to use cache (default: True)
+            on_progress: Optional callback for progress updates
 
         Returns:
             Created opportunity
@@ -125,10 +128,13 @@ class OpportunityService:
                         "recruiter_name": recruiter_name,
                     },
                 ):
-                    pipeline_result = self.pipeline.forward(
+                    # Run blocking DSPy pipeline in threadpool to allow streaming
+                    pipeline_result = await run_in_threadpool(
+                        self.pipeline.forward,
                         message=raw_message,
                         recruiter_name=recruiter_name,
                         profile=self.profile,
+                        on_progress=on_progress,
                     )
 
                     add_span_attributes(

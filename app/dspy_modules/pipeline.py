@@ -5,6 +5,7 @@ This is the main entry point for processing LinkedIn recruiter messages.
 """
 
 import time
+from collections.abc import Callable
 
 import dspy
 
@@ -70,6 +71,7 @@ class OpportunityPipeline(dspy.Module):
         message: str,
         recruiter_name: str,
         profile: CandidateProfile,
+        on_progress: Callable[[str, dict], None] | None = None,
     ) -> OpportunityResult:
         """
         Process a recruiter message through the complete pipeline.
@@ -78,6 +80,7 @@ class OpportunityPipeline(dspy.Module):
             message: Raw recruiter message
             recruiter_name: Recruiter's name
             profile: Candidate profile
+            on_progress: Optional callback for progress updates
 
         Returns:
             OpportunityResult: Complete processing result
@@ -102,7 +105,16 @@ class OpportunityPipeline(dspy.Module):
 
             # Step 0: Analyze conversation state
             logger.debug("pipeline_step", step="conversation_state")
+            if on_progress:
+                on_progress("conversation_state", {"status": "analyzing"})
+
             conversation_state = self.conversation_state_analyzer(message=message)
+
+            if on_progress:
+                on_progress(
+                    "conversation_state",
+                    {"status": "completed", "state": conversation_state.state.value},
+                )
 
             # If COURTESY_CLOSE, return early with minimal processing
             if not conversation_state.should_process:
@@ -151,26 +163,45 @@ class OpportunityPipeline(dspy.Module):
                     profile_dict=profile_dict,
                     conversation_state=conversation_state,
                     start_time=start_time,
+                    on_progress=on_progress,
                 )
 
             # --- Normal flow for NEW_OPPORTUNITY ---
 
             # Step 1: Extract structured data
             logger.debug("pipeline_step", step="analyze")
+            if on_progress:
+                on_progress("extracting", {"status": "started"})
+
             extracted = self.analyzer(message=message)
+
+            if on_progress:
+                on_progress("extracted", extracted.dict())
 
             # Step 2: Score the opportunity
             logger.debug("pipeline_step", step="score")
+            if on_progress:
+                on_progress("scoring", {"status": "started"})
+
             scoring = self.scorer(extracted=extracted, profile=profile)
+
+            if on_progress:
+                on_progress("scored", scoring.dict())
 
             # Step 3: Apply hard filters
             logger.debug("pipeline_step", step="hard_filters")
+            if on_progress:
+                on_progress("filtering", {"status": "started"})
+
             hard_filter_result = apply_hard_filters(
                 extracted=extracted,
                 scoring=scoring,
                 raw_message=message,
                 profile_dict=profile_dict,
             )
+
+            if on_progress:
+                on_progress("filtered", hard_filter_result.dict())
 
             # Determine candidate status
             candidate_status = get_candidate_status_from_profile(profile_dict)
@@ -183,6 +214,9 @@ class OpportunityPipeline(dspy.Module):
 
             # Step 4: Generate response
             logger.debug("pipeline_step", step="generate_response")
+            if on_progress:
+                on_progress("drafting", {"status": "started"})
+
             response = self.generator(
                 recruiter_name=recruiter_name,
                 extracted=extracted,
@@ -192,6 +226,9 @@ class OpportunityPipeline(dspy.Module):
                 candidate_status=candidate_status,
                 hard_filter_result=hard_filter_result,
             )
+
+            if on_progress:
+                on_progress("drafted", {"response_length": len(response)})
 
             # Calculate processing time
             processing_time_ms = int((time.time() - start_time) * 1000)
@@ -250,6 +287,7 @@ class OpportunityPipeline(dspy.Module):
         profile_dict: dict,
         conversation_state: ConversationStateResult,
         start_time: float,
+        on_progress: Callable[[str, dict], None] | None = None,
     ) -> OpportunityResult:
         """
         Handle FOLLOW_UP messages with special logic.
@@ -267,11 +305,14 @@ class OpportunityPipeline(dspy.Module):
             profile_dict: Full profile dictionary
             conversation_state: Already analyzed conversation state
             start_time: Pipeline start time for timing
+            on_progress: Optional callback for progress updates
 
         Returns:
             OpportunityResult: Result with appropriate status
         """
         logger.debug("pipeline_step", step="follow_up_analysis")
+        if on_progress:
+            on_progress("follow_up_analysis", {"status": "started"})
 
         # Analyze the follow-up message
         follow_up_analysis = self.follow_up_analyzer(
@@ -282,11 +323,23 @@ class OpportunityPipeline(dspy.Module):
         # Perform meaningful extraction on follow-up messages too
         # Since we now have full conversation history, we can extract company/role even from follow-ups
         logger.debug("pipeline_step", step="follow_up_extraction")
+        if on_progress:
+            on_progress("extracting", {"status": "started"})
+
         extracted = self.analyzer(message=message)
+
+        if on_progress:
+            on_progress("extracted", extracted.dict())
 
         # Score the opportunity based on the extracted data
         logger.debug("pipeline_step", step="follow_up_scoring")
+        if on_progress:
+            on_progress("scoring", {"status": "started"})
+
         scoring = self.scorer(extracted=extracted, profile=profile)
+
+        if on_progress:
+            on_progress("scored", scoring.dict())
 
         # Calculate processing time
         processing_time_ms = int((time.time() - start_time) * 1000)

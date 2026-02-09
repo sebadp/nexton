@@ -133,7 +133,7 @@ async def trigger_scraping_stream(
                 ):
                     event_type = event.get("event", "message")
                     yield f"event: {event_type}\n"
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
 
                     # Update state on completion
                     if event_type in ("completed", "error"):
