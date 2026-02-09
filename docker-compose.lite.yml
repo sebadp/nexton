@@ -78,6 +78,7 @@ services:
       # LinkedIn credentials
       - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
       - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+      - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
       # Observability deshabilitado
       - OTEL_ENABLED=false
       - PROFILE_PATH=/app/config/profile.yaml

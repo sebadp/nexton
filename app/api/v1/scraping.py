@@ -2,9 +2,11 @@
 Scraping API endpoints for triggering and monitoring LinkedIn scraping.
 """
 
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/scraping", tags=["scraping"])
@@ -79,6 +81,87 @@ async def trigger_scraping(
 
     # Full mode: use Celery
     return await _trigger_full_mode_scraping(request)
+
+
+@router.get("/trigger/stream")
+async def trigger_scraping_stream(
+    limit: int = 20,
+    unread_only: bool = True,
+) -> StreamingResponse:
+    """
+    Trigger LinkedIn scraping with SSE streaming progress.
+
+    Returns Server-Sent Events with real-time progress updates:
+    - started: Scraping initiated
+    - progress: Step updates (login, scraping, analyzing)
+    - opportunity_created: New opportunity saved
+    - completed: Scraping finished successfully
+    - error: An error occurred
+
+    Use EventSource in the browser to consume this endpoint.
+    """
+    global _scraping_state
+
+    from app.core.config import settings
+
+    if not settings.LITE_MODE:
+        raise HTTPException(
+            status_code=400,
+            detail="SSE streaming is only available in LITE_MODE",
+        )
+
+    if _scraping_state["is_running"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Scraping is already in progress.",
+        )
+
+    async def event_generator():
+        global _scraping_state
+        _scraping_state["is_running"] = True
+
+        try:
+            from app.database.base import AsyncSessionLocal
+            from app.services.scraping_service import ScrapingService
+
+            async with AsyncSessionLocal() as db:
+                service = ScrapingService(db)
+
+                async for event in service.scrape_with_progress(
+                    limit=limit,
+                    unread_only=unread_only,
+                ):
+                    event_type = event.get("event", "message")
+                    yield f"event: {event_type}\n"
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+                    # Update state on completion
+                    if event_type in ("completed", "error"):
+                        _scraping_state["last_run"] = datetime.utcnow().isoformat()
+                        _scraping_state["last_run_status"] = event.get("status", "unknown")
+                        _scraping_state["last_run_count"] = event.get("opportunities_created", 0)
+
+        except Exception as e:
+            error_event = {
+                "event": "error",
+                "message": f"Error: {str(e)}",
+                "detail": str(e),
+            }
+            yield "event: error\n"
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+        finally:
+            _scraping_state["is_running"] = False
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 async def _trigger_lite_mode_scraping(

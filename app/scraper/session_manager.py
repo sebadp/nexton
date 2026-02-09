@@ -329,11 +329,29 @@ class SessionManager:
                 logger.info("login_successful", email=email)
             else:
                 logger.warning("login_failed", email=email)
+                # Save screenshot of failure
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    screenshot_path = f"logs/login_failure_{timestamp}.png"
+                    await page.screenshot(path=screenshot_path, full_page=True)
+                    logger.info("login_failure_screenshot_saved", path=screenshot_path)
+                except Exception as e:
+                    logger.warning("failed_to_save_failure_screenshot", error=str(e))
 
             return is_logged_in
 
         except Exception as e:
             logger.error("login_error", error=str(e), email=email)
+            # Try to save screenshot on error too
+            try:
+                if self._page:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    screenshot_path = f"logs/login_error_{timestamp}.png"
+                    await self._page.screenshot(path=screenshot_path, full_page=True)
+                    logger.info("login_error_screenshot_saved", path=screenshot_path)
+            except Exception:
+                pass
+
             raise ScraperError(
                 message="Failed to login to LinkedIn",
                 details={"error": str(e), "email": email},

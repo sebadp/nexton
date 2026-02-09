@@ -29,7 +29,7 @@ services:
     networks:
       - linkedin-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-linkedin_agent}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-linkedin_agent}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +46,7 @@ services:
     networks:
       - linkedin-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -60,8 +60,8 @@ services:
     image: axllent/mailpit:latest
     container_name: linkedin-agent-mailpit
     ports:
-      - "8025:8025"  # Web UI - view emails here
-      - "1025:1025"  # SMTP
+      - "8025:8025" # Web UI - view emails here
+      - "1025:1025" # SMTP
     networks:
       - linkedin-network
     restart: unless-stopped
@@ -80,6 +80,7 @@ services:
     environment:
       - ENV=${ENV:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LITE_MODE=${LITE_MODE:-true}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-linkedin_agent}
       - REDIS_URL=redis://redis:6379/0
       # Celery (for triggering tasks from API)
@@ -97,6 +98,10 @@ services:
       - SMTP_USE_TLS=false
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@linkedin-agent.local}
       - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-user@example.com}
+      # LinkedIn (Required for LITE_MODE scraping)
+      - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
+      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+      - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
       # Observability (disabled by default)
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - PROFILE_PATH=/app/config/profile.yaml

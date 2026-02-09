@@ -4,6 +4,7 @@ Scraping service for lite mode.
 Provides synchronous scraping without Celery/Redis dependencies.
 """
 
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
@@ -174,6 +175,180 @@ class ScrapingService:
 
         finally:
             # Cleanup scraper
+            if self._scraper:
+                await self._scraper.cleanup()
+                self._scraper = None
+
+    async def scrape_with_progress(
+        self,
+        limit: int = 10,
+        unread_only: bool = True,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        Run scraping with progress events for SSE streaming.
+
+        Yields progress events during each phase:
+        - started: Initial event
+        - progress: Step updates (login, scraping, analyzing)
+        - opportunity_created: When an opportunity is saved
+        - completed/error: Final event
+
+        Args:
+            limit: Maximum messages to scrape
+            unread_only: Only scrape unread messages
+
+        Yields:
+            Progress event dictionaries
+        """
+        logger.info("sse_scraping_started", limit=limit, unread_only=unread_only)
+        start_time = datetime.utcnow()
+
+        yield {
+            "event": "started",
+            "message": "Iniciando scraping de LinkedIn...",
+        }
+
+        try:
+            # Initialize scraper
+            yield {
+                "event": "progress",
+                "step": "login",
+                "message": "Conectando a LinkedIn...",
+            }
+
+            config = ScraperConfig(
+                email=settings.LINKEDIN_EMAIL,
+                password=settings.LINKEDIN_PASSWORD,
+                headless=settings.SCRAPER_HEADLESS,
+            )
+            self._scraper = LinkedInScraper(config)
+            await self._scraper.initialize()
+
+            yield {
+                "event": "progress",
+                "step": "login",
+                "status": "done",
+                "message": "✓ Conectado a LinkedIn",
+            }
+
+            # Scrape messages
+            yield {
+                "event": "progress",
+                "step": "scraping",
+                "message": "Buscando mensajes...",
+            }
+
+            messages = await self._scraper.scrape_messages(
+                limit=limit,
+                unread_only=unread_only,
+            )
+
+            if not messages:
+                yield {
+                    "event": "completed",
+                    "status": "no_messages",
+                    "message": "No hay mensajes nuevos sin leer en LinkedIn.",
+                    "opportunities_created": 0,
+                }
+                return
+
+            yield {
+                "event": "progress",
+                "step": "scraping",
+                "status": "done",
+                "message": f"✓ Encontrados {len(messages)} mensajes",
+                "count": len(messages),
+            }
+
+            # Process each message
+            from app.services.opportunity_service import OpportunityService
+
+            service = OpportunityService(self.db, cache=None)
+            opportunities_created = 0
+            errors: list[str] = []
+
+            for i, msg in enumerate(messages, 1):
+                yield {
+                    "event": "progress",
+                    "step": "analyzing",
+                    "current": i,
+                    "total": len(messages),
+                    "message": f"Analizando mensaje {i}/{len(messages)}: {msg.sender_name}...",
+                    "sender": msg.sender_name,
+                }
+
+                try:
+                    opportunity = await service.create_opportunity(
+                        recruiter_name=msg.sender_name,
+                        raw_message=msg.message_text,
+                        message_timestamp=msg.timestamp,
+                        use_cache=False,
+                    )
+                    opportunities_created += 1
+
+                    yield {
+                        "event": "opportunity_created",
+                        "id": opportunity.id,
+                        "company": opportunity.company or "Unknown",
+                        "role": opportunity.role or "Unknown",
+                        "score": opportunity.total_score,
+                        "tier": opportunity.tier,
+                        "message": f"✓ Oportunidad creada: {opportunity.company or 'Unknown'} ({opportunity.total_score}pts)",
+                    }
+
+                except Exception as e:
+                    error_msg = f"Error procesando mensaje de {msg.sender_name}: {str(e)}"
+                    logger.error("sse_processing_error", error=error_msg)
+                    errors.append(error_msg)
+                    yield {
+                        "event": "error",
+                        "step": "analyzing",
+                        "message": f"⚠ Error: {msg.sender_name}",
+                        "detail": str(e),
+                    }
+
+            # Final summary
+            duration = (datetime.utcnow() - start_time).total_seconds()
+
+            if opportunities_created == 0:
+                final_message = "Scraping completado pero no se crearon oportunidades."
+            elif opportunities_created == 1:
+                final_message = "✅ Scraping completado. Se creó 1 nueva oportunidad."
+            else:
+                final_message = f"✅ Scraping completado. Se crearon {opportunities_created} nuevas oportunidades."
+
+            yield {
+                "event": "completed",
+                "status": "success",
+                "message": final_message,
+                "opportunities_created": opportunities_created,
+                "messages_found": len(messages),
+                "duration_seconds": duration,
+                "errors": errors if errors else None,
+            }
+
+        except Exception as e:
+            logger.error("sse_scraping_failed", error=str(e))
+
+            # User-friendly error messages
+            error_str = str(e).lower()
+            if "login" in error_str or "credentials" in error_str:
+                message = "❌ Error de autenticación: No se pudo iniciar sesión en LinkedIn."
+            elif "timeout" in error_str:
+                message = "❌ LinkedIn no respondió a tiempo. Intenta de nuevo."
+            elif "session" in error_str or "cookie" in error_str:
+                message = "❌ La sesión de LinkedIn expiró."
+            else:
+                message = f"❌ Error durante el scraping: {str(e)}"
+
+            yield {
+                "event": "error",
+                "status": "error",
+                "message": message,
+                "detail": str(e),
+            }
+
+        finally:
             if self._scraper:
                 await self._scraper.cleanup()
                 self._scraper = None
