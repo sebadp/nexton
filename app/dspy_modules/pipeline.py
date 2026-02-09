@@ -113,7 +113,11 @@ class OpportunityPipeline(dspy.Module):
             if on_progress:
                 on_progress(
                     "conversation_state",
-                    {"status": "completed", "state": conversation_state.state.value},
+                    {
+                        "status": "completed",
+                        "state": conversation_state.state.value,
+                        "reasoning": conversation_state.reasoning,
+                    },
                 )
 
             # If COURTESY_CLOSE, return early with minimal processing
@@ -171,7 +175,7 @@ class OpportunityPipeline(dspy.Module):
             # Step 1: Extract structured data
             logger.debug("pipeline_step", step="analyze")
             if on_progress:
-                on_progress("extracting", {"status": "started"})
+                on_progress("extracting", {"status": "started", "message": "Thinking..."})
 
             extracted = self.analyzer(message=message)
 
@@ -181,17 +185,26 @@ class OpportunityPipeline(dspy.Module):
             # Step 2: Score the opportunity
             logger.debug("pipeline_step", step="score")
             if on_progress:
-                on_progress("scoring", {"status": "started"})
+                on_progress("scoring", {"status": "started", "message": "Thinking..."})
 
             scoring = self.scorer(extracted=extracted, profile=profile)
 
             if on_progress:
-                on_progress("scored", scoring.dict())
+                on_progress(
+                    "scored",
+                    {
+                        **scoring.dict(),
+                        "tech_stack_reasoning": scoring.tech_stack_reasoning,
+                        "salary_reasoning": scoring.salary_reasoning,
+                        "seniority_reasoning": scoring.seniority_reasoning,
+                        "company_reasoning": scoring.company_reasoning,
+                    },
+                )
 
             # Step 3: Apply hard filters
             logger.debug("pipeline_step", step="hard_filters")
             if on_progress:
-                on_progress("filtering", {"status": "started"})
+                on_progress("filtering", {"status": "started", "message": "Thinking..."})
 
             hard_filter_result = apply_hard_filters(
                 extracted=extracted,
@@ -201,7 +214,13 @@ class OpportunityPipeline(dspy.Module):
             )
 
             if on_progress:
-                on_progress("filtered", hard_filter_result.dict())
+                on_progress(
+                    "filtered",
+                    {
+                        **hard_filter_result.dict(),
+                        "reasoning": hard_filter_result.reasoning,
+                    },
+                )
 
             # Determine candidate status
             candidate_status = get_candidate_status_from_profile(profile_dict)
@@ -215,7 +234,7 @@ class OpportunityPipeline(dspy.Module):
             # Step 4: Generate response
             logger.debug("pipeline_step", step="generate_response")
             if on_progress:
-                on_progress("drafting", {"status": "started"})
+                on_progress("drafting", {"status": "started", "message": "Thinking..."})
 
             response = self.generator(
                 recruiter_name=recruiter_name,

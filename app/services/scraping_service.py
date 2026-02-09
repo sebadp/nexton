@@ -313,34 +313,38 @@ class ScrapingService:
                             )
 
                             # Map pipeline steps to user-friendly messages
-                            message_text = f"Analizando mensaje {i}/{len(messages)}..."
+                            message_text = step_data.get(
+                                "message", f"Analizando mensaje {i}/{len(messages)}..."
+                            )
 
-                            if step_name == "conversation_state":
-                                message_text = "Analizando tipo de mensaje..."
-                            elif step_name == "extracting":
-                                message_text = "Extrayendo datos clave (Empresa, Rol)..."
+                            # Specific formatting for completed steps
+                            if (
+                                step_name == "conversation_state"
+                                and step_data.get("status") == "completed"
+                            ):
+                                state = step_data.get("state", "UNKNOWN")
+                                message_text = f"✓ Tipo de mensaje: {state}"
                             elif step_name == "extracted":
                                 company = step_data.get("company", "Unknown")
                                 role = step_data.get("role", "Unknown")
-                                message_text = f"Datos extraídos: {company} - {role}"
-                            elif step_name == "scoring":
-                                message_text = "Calculando relevancia y puntaje..."
+                                message_text = f"✓ Datos extraídos: {company} - {role}"
                             elif step_name == "scored":
                                 score = step_data.get("total_score", 0)
-                                message_text = f"Puntaje calculado: {score}/100"
-                            elif step_name == "filtering":
-                                message_text = "Verificando filtros obligatorios..."
+                                message_text = f"✓ Puntaje calculado: {score}/100"
                             elif step_name == "filtered":
-                                message_text = "Filtros verificados."
-                            elif step_name == "drafting":
-                                message_text = "Generando borrador de respuesta..."
+                                passed = step_data.get("passed", False)
+                                if passed:
+                                    message_text = "✓ Filtros verificados (Aprobado)"
+                                else:
+                                    message_text = "✕ Filtros verificados (Rechazado)"
                             elif step_name == "drafted":
                                 length = step_data.get("response_length", 0)
-                                message_text = f"Respuesta generada ({length} caracteres)."
+                                message_text = f"✓ Respuesta generada ({length} caracteres)"
 
                             yield {
                                 "event": "progress",
-                                "step": "analyzing",
+                                "step": step_name,
+                                "status": step_data.get("status", "processing"),
                                 "current": i,
                                 "total": len(messages),
                                 "message": message_text,

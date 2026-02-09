@@ -17,8 +17,12 @@ export interface ScrapingEvent {
     opportunities_created?: number
     messages_found?: number
     duration_seconds?: number
-    detail?: string
-    errors?: string[]
+    detail?: any
+    reasoning?: string
+    tech_stack_reasoning?: string
+    salary_reasoning?: string
+    seniority_reasoning?: string
+    company_reasoning?: string
 }
 
 export interface UseScrapingStreamResult {
@@ -72,7 +76,22 @@ export function useScrapingStream(): UseScrapingStreamResult {
         const handleEvent = (e: MessageEvent) => {
             try {
                 const data: ScrapingEvent = JSON.parse(e.data)
-                setEvents((prev) => [...prev, data])
+
+                setEvents((prev) => {
+                    const lastEvent = prev[prev.length - 1]
+                    // Deduplicate logic: if same step and message index, update in place
+                    // This allows "Thinking..." to turn into "Done" without a new row
+                    if (
+                        lastEvent &&
+                        lastEvent.event === "progress" &&
+                        data.event === "progress" &&
+                        lastEvent.step === data.step &&
+                        lastEvent.current === data.current
+                    ) {
+                        return [...prev.slice(0, -1), data]
+                    }
+                    return [...prev, data]
+                })
 
                 // Update current step
                 if (data.step) {

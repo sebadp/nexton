@@ -94,6 +94,10 @@ class HardFilterResult(BaseModel):
         description="4-day work week status: CONFIRMED, NOT_MENTIONED, FIVE_DAY, UNKNOWN",
         default="UNKNOWN",
     )
+    reasoning: str = Field(
+        description="Explanation of why filters passed or failed",
+        default="",
+    )
 
     @classmethod
     def all_passed(cls) -> "HardFilterResult":
