@@ -406,6 +406,22 @@ class OpportunityPipeline(dspy.Module):
 
         return result
 
+    def refresh_configuration(self) -> None:
+        """
+        Refresh pipeline configuration from global settings.
+
+        Call this after updating settings to ensure the pipeline uses
+        the latest configuration (e.g. temperature, provider).
+        """
+        logger.info("refreshing_pipeline_configuration")
+
+        # Re-initialize creative LM
+        self.creative_lm = create_lm(temperature=settings.LLM_TEMPERATURE_GENERATION)
+
+        logger.info(
+            "pipeline_configuration_refreshed", creative_temp=settings.LLM_TEMPERATURE_GENERATION
+        )
+
 
 def create_lm(
     provider_type: str | None = None,

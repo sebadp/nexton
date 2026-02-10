@@ -22,6 +22,7 @@ class SettingsResponse(BaseModel):
     llm_provider: str
     llm_model: str
     llm_temperature: float
+    llm_temperature_generation: float
     linkedin_email: str
     linkedin_password_set: bool
     smtp_host: str
@@ -37,6 +38,7 @@ class UpdateSettingsRequest(BaseModel):
     llm_provider: str | None = None
     llm_model: str | None = None
     llm_temperature: float | None = None
+    llm_temperature_generation: float | None = None
     linkedin_email: str | None = None
     linkedin_password: str | None = None
     smtp_host: str | None = None
@@ -56,6 +58,7 @@ async def get_settings() -> SettingsResponse:
         llm_provider=settings.LLM_PROVIDER,
         llm_model=settings.LLM_MODEL,
         llm_temperature=settings.LLM_TEMPERATURE,
+        llm_temperature_generation=settings.LLM_TEMPERATURE_GENERATION,
         linkedin_email=settings.LINKEDIN_EMAIL,
         linkedin_password_set=bool(settings.LINKEDIN_PASSWORD),
         smtp_host=settings.SMTP_HOST,
@@ -87,6 +90,16 @@ async def update_settings(request: UpdateSettingsRequest) -> SettingsResponse:
         if request.llm_temperature is not None:
             os.environ["LLM_TEMPERATURE"] = str(request.llm_temperature)
             settings.LLM_TEMPERATURE = request.llm_temperature
+
+        if request.llm_temperature_generation is not None:
+            os.environ["LLM_TEMPERATURE_GENERATION"] = str(request.llm_temperature_generation)
+            settings.LLM_TEMPERATURE_GENERATION = request.llm_temperature_generation
+
+            # Refresh pipeline to use new creative LM
+            from app.dspy_modules.pipeline import get_pipeline
+
+            pipeline = get_pipeline()
+            pipeline.refresh_configuration()
 
         if request.linkedin_email is not None:
             os.environ["LINKEDIN_EMAIL"] = request.linkedin_email

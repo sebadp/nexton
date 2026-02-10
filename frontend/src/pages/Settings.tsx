@@ -24,6 +24,7 @@ const settingsSchema = z.object({
   llm_provider: z.string(),
   llm_model: z.string(),
   llm_temperature: z.number().min(0).max(2),
+  llm_temperature_generation: z.number().min(0).max(2),
   linkedin_email: z.string().email().or(z.literal("")),
   linkedin_password: z.string().optional(),
   smtp_host: z.string(),
@@ -44,7 +45,8 @@ export default function Settings() {
     defaultValues: {
       llm_provider: "ollama",
       llm_model: "llama2",
-      llm_temperature: 0.7,
+      llm_temperature: 0.0,
+      llm_temperature_generation: 0.7,
       linkedin_email: "",
       linkedin_password: "",
       smtp_host: "localhost",
@@ -60,6 +62,7 @@ export default function Settings() {
         llm_provider: settings.llm_provider,
         llm_model: settings.llm_model,
         llm_temperature: settings.llm_temperature,
+        llm_temperature_generation: settings.llm_temperature_generation,
         linkedin_email: settings.linkedin_email,
         linkedin_password: "",
         smtp_host: settings.smtp_host,
@@ -81,6 +84,9 @@ export default function Settings() {
     }
     if (data.llm_temperature !== settings?.llm_temperature) {
       updateData.llm_temperature = data.llm_temperature
+    }
+    if (data.llm_temperature_generation !== settings?.llm_temperature_generation) {
+      updateData.llm_temperature_generation = data.llm_temperature_generation
     }
     if (data.linkedin_email !== settings?.linkedin_email) {
       updateData.linkedin_email = data.linkedin_email
@@ -183,7 +189,7 @@ export default function Settings() {
 
             <div className="space-y-2">
               <Label htmlFor="llm_temperature">
-                Temperature ({form.watch("llm_temperature")})
+                Analysis Temperature (Strict) - {form.watch("llm_temperature")}
               </Label>
               <Input
                 id="llm_temperature"
@@ -193,6 +199,26 @@ export default function Settings() {
                 step="0.1"
                 {...form.register("llm_temperature", { valueAsNumber: true })}
               />
+              <p className="text-xs text-muted-foreground">
+                Controls data extraction and scoring. Keep low (0.0 - 0.2) for accuracy.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="llm_temperature_generation">
+                Generation Temperature (Creative) - {form.watch("llm_temperature_generation")}
+              </Label>
+              <Input
+                id="llm_temperature_generation"
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                {...form.register("llm_temperature_generation", { valueAsNumber: true })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls response drafting. Increase (0.7 - 1.0) for more natural, less robotic replies.
+              </p>
             </div>
           </CardContent>
         </Card>
