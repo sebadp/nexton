@@ -5,7 +5,6 @@ Database models using SQLAlchemy ORM.
 from datetime import datetime
 
 from sqlalchemy import (
-    ARRAY,
     JSON,
     TIMESTAMP,
     Boolean,
@@ -41,7 +40,7 @@ class Opportunity(Base):
     # Job Information
     role: Mapped[str | None] = mapped_column(String(255), nullable=True)
     seniority: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    tech_stack: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Compensation
     salary_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -116,6 +115,18 @@ class Opportunity(Base):
         JSON,
         nullable=True,
         comment="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
+    )
+
+    # Feedback Loop (NEW)
+    feedback_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="1 = Like (Correct), -1 = Dislike (Incorrect), 0 = Neutral",
+    )
+    feedback_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="User comments explaining the feedback",
     )
 
     # Raw Data
@@ -200,6 +211,8 @@ class Opportunity(Base):
             "manual_review_reason": self.manual_review_reason,
             "hard_filter_results": self.hard_filter_results,
             "follow_up_analysis": self.follow_up_analysis,
+            "feedback_score": self.feedback_score,
+            "feedback_notes": self.feedback_notes,
             # Timestamps
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

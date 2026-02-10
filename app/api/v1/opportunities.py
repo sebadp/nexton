@@ -65,6 +65,8 @@ def _opportunity_to_response(opportunity: Opportunity) -> OpportunityResponse:
         manual_review_reason=opportunity.manual_review_reason,
         hard_filter_results=opportunity.hard_filter_results,
         follow_up_analysis=opportunity.follow_up_analysis,
+        feedback_score=opportunity.feedback_score,
+        feedback_notes=opportunity.feedback_notes,
         # Metadata
         status=opportunity.status,
         processing_time_ms=opportunity.processing_time_ms,
