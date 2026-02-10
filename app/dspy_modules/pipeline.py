@@ -66,6 +66,9 @@ class OpportunityPipeline(dspy.Module):
         self.generator = ResponseGenerator()
         self.follow_up_analyzer = FollowUpAnalyzer()
 
+        # Initialize creative LM for response generation
+        self.creative_lm = create_lm(temperature=settings.LLM_TEMPERATURE_GENERATION)
+
         logger.info("opportunity_pipeline_initialized")
 
     @observe(name="dspy.pipeline.forward")
@@ -242,15 +245,17 @@ class OpportunityPipeline(dspy.Module):
             if on_progress:
                 on_progress("drafting", {"status": "started", "message": "Thinking..."})
 
-            response = self.generator(
-                recruiter_name=recruiter_name,
-                extracted=extracted,
-                scoring=scoring,
-                candidate_name=profile.name,
-                profile=profile_dict,
-                candidate_status=candidate_status,
-                hard_filter_result=hard_filter_result,
-            )
+            # Use creative LM for response generation
+            with dspy.context(lm=self.creative_lm):
+                response = self.generator(
+                    recruiter_name=recruiter_name,
+                    extracted=extracted,
+                    scoring=scoring,
+                    candidate_name=profile.name,
+                    profile=profile_dict,
+                    candidate_status=candidate_status,
+                    hard_filter_result=hard_filter_result,
+                )
 
             if on_progress:
                 on_progress("drafted", {"response_length": len(response)})
@@ -317,24 +322,6 @@ class OpportunityPipeline(dspy.Module):
     ) -> OpportunityResult:
         """
         Handle FOLLOW_UP messages with special logic.
-
-        For FOLLOW_UP messages:
-        - Skip hard filters (they don't apply to follow-ups)
-        - Use FollowUpAnalyzer to check if question can be auto-answered
-        - If auto-respondable: generate auto-response from profile data
-        - If not auto-respondable: mark as MANUAL_REVIEW_REQUIRED
-
-        Args:
-            message: Raw recruiter message
-            recruiter_name: Recruiter's name
-            profile: Candidate profile
-            profile_dict: Full profile dictionary
-            conversation_state: Already analyzed conversation state
-            start_time: Pipeline start time for timing
-            on_progress: Optional callback for progress updates
-
-        Returns:
-            OpportunityResult: Result with appropriate status
         """
         logger.debug("pipeline_step", step="follow_up_analysis")
         if on_progress:
@@ -347,7 +334,6 @@ class OpportunityPipeline(dspy.Module):
         )
 
         # Perform meaningful extraction on follow-up messages too
-        # Since we now have full conversation history, we can extract company/role even from follow-ups
         logger.debug("pipeline_step", step="follow_up_extraction")
         if on_progress:
             on_progress("extracting", {"status": "started"})
@@ -421,6 +407,56 @@ class OpportunityPipeline(dspy.Module):
         return result
 
 
+def create_lm(
+    provider_type: str | None = None,
+    model_name: str | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> dspy.LM:
+    """
+    Create a DSPy LM instance.
+
+    Args:
+        provider_type: LLM provider
+        model_name: Model name
+        max_tokens: Max tokens
+        temperature: Temperature
+
+    Returns:
+        dspy.LM: Configured LM instance
+    """
+    provider_type = provider_type or settings.LLM_PROVIDER
+    model_name = model_name or settings.LLM_MODEL
+    max_tokens = max_tokens or settings.LLM_MAX_TOKENS
+    temperature = temperature if temperature is not None else settings.LLM_TEMPERATURE
+
+    if provider_type == "ollama":
+        model_string = f"ollama/{model_name}"
+        return dspy.LM(
+            model=model_string,
+            api_base=settings.OLLAMA_URL,
+            api_key="ollama",
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    elif provider_type == "openai":
+        model_string = f"openai/{model_name}"
+        return dspy.LM(
+            model=model_string,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    elif provider_type == "anthropic":
+        model_string = f"anthropic/{model_name}"
+        return dspy.LM(
+            model=model_string,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    else:
+        raise ValueError(f"Unsupported provider: {provider_type}")
+
+
 def configure_dspy(
     provider_type: str | None = None,
     model_name: str | None = None,
@@ -428,84 +464,28 @@ def configure_dspy(
     temperature: float | None = None,
 ) -> None:
     """
-    Configure DSPy with LLM provider.
-
-    Supports multiple providers: OpenAI, Anthropic, Ollama.
-
-    Args:
-        provider_type: LLM provider (openai, anthropic, ollama). Defaults to LLM_PROVIDER setting.
-        model_name: Model name. Defaults to LLM_MODEL setting.
-        max_tokens: Maximum tokens (default from settings)
-        temperature: LLM temperature (default from settings)
+    Configure global DSPy settings.
     """
-    provider_type = provider_type or settings.LLM_PROVIDER
-    model_name = model_name or settings.LLM_MODEL
-    max_tokens = max_tokens or settings.LLM_MAX_TOKENS
-    temperature = temperature or settings.LLM_TEMPERATURE
-
-    logger.info(
-        "configuring_dspy",
-        extra={
-            "provider": provider_type,
-            "model": model_name,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        },
-    )
-
     try:
-        # DSPy 3.x uses native LM interface
-        # Format: "provider/model"
-        if provider_type == "ollama":
-            model_string = f"ollama/{model_name}"
-            lm = dspy.LM(
-                model=model_string,
-                api_base=settings.OLLAMA_URL,
-                api_key="ollama",  # Ollama doesn't need a real key
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-        elif provider_type == "openai":
-            model_string = f"openai/{model_name}"
-            lm = dspy.LM(
-                model=model_string,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-        elif provider_type == "anthropic":
-            model_string = f"anthropic/{model_name}"
-            lm = dspy.LM(
-                model=model_string,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-        else:
-            raise ValueError(f"Unsupported provider: {provider_type}")
-
-        # Callbacks (deprecated/removed in this version of langfuse)
-        # We rely on the @observe decorator for now, as CallbackHandler is not available
-        # in the installed SDK version via the expected import path.
-
-        # Set as default LM for DSPy
+        lm = create_lm(provider_type, model_name, max_tokens, temperature)
         dspy.settings.configure(lm=lm)
 
         logger.info(
             "dspy_configured_successfully",
             extra={
-                "provider": provider_type,
-                "model": model_name,
+                "provider": lm.model,
             },
         )
 
     except Exception as e:
         logger.error(
             "dspy_configuration_failed",
-            extra={"provider": provider_type, "model": model_name, "error": str(e)},
+            extra={"error": str(e)},
             exc_info=True,
         )
         raise PipelineError(
-            message=f"Failed to configure DSPy with {provider_type}",
-            details={"provider": provider_type, "model": model_name, "error": str(e)},
+            message="Failed to configure DSPy",
+            details={"error": str(e)},
         ) from e
 
 

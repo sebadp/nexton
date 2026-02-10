@@ -150,22 +150,38 @@ class ScoringSignature(dspy.Signature):
 
     # Outputs
     tech_stack_score: int = dspy.OutputField(
-        desc="Tech stack match score (0-40 points). 40 = perfect match, 0 = no match"
+        desc="""Tech stack match score (0-40 points):
+        - 40: Perfect match (all core technologies present).
+        - 30: Good match (core present, missing some secondary).
+        - 20: Partial match (missing one core technology).
+        - 10: Poor match (missing multiple core technologies).
+        - 0: No match (completely different stack)."""
     )
     tech_stack_reasoning: str = dspy.OutputField(desc="Brief explanation of tech stack score")
 
     salary_score: int = dspy.OutputField(
-        desc="Salary adequacy score (0-30 points). 30 = excellent, 0 = too low"
+        desc="""Salary adequacy score (0-30 points):
+        - 30: Excellent (Above ideal salary).
+        - 20: Good (Between minimum and ideal).
+        - 10: Below expectations (Below minimum but close).
+        - 0: Deal breaker (Significantly below minimum or not mentioned)."""
     )
     salary_reasoning: str = dspy.OutputField(desc="Brief explanation of salary score")
 
     seniority_score: int = dspy.OutputField(
-        desc="Seniority match score (0-20 points). 20 = perfect fit, 0 = mismatch"
+        desc="""Seniority match score (0-20 points):
+        - 20: Perfect fit (Exact seniority level).
+        - 15: Good fit (One level difference, e.g. Senior vs Staff).
+        - 5: Poor fit (Two levels difference, e.g. Junior vs Senior).
+        - 0: Mismatch (Three+ levels difference)."""
     )
     seniority_reasoning: str = dspy.OutputField(desc="Brief explanation of seniority score")
 
     company_score: int = dspy.OutputField(
-        desc="Company attractiveness score (0-10 points). 10 = top company, 0 = unknown"
+        desc="""Company attractiveness score (0-10 points):
+        - 10: Top Tier / Big Tech (Known industry leader).
+        - 5: Standard / Unknown (Regular company).
+        - 0: Avoid / Red Flags (Known bad reputation)."""
     )
     company_reasoning: str = dspy.OutputField(desc="Brief explanation of company score")
 

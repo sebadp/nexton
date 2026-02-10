@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "ollama"  # openai, anthropic, ollama
     LLM_MODEL: str = "llama2"
     LLM_MAX_TOKENS: int = 500
-    LLM_TEMPERATURE: float = 0.7
+    LLM_TEMPERATURE: float = 0.0
+    LLM_TEMPERATURE_GENERATION: float = 0.7
     LLM_TIMEOUT: int = 30
 
     # OpenAI
