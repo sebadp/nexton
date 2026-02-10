@@ -15,6 +15,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from app.core.exceptions import ScraperError
 from app.core.logging import get_logger
 from app.core.profile import get_user_profile
+from app.observability import observe
 from app.scraper.rate_limiter import AdaptiveRateLimiter, RateLimitConfig
 from app.scraper.session_manager import SessionManager
 
@@ -278,6 +279,7 @@ class LinkedInScraper:
             headless=config.headless,
         )
 
+    @observe(name="linkedin_scraper.initialize")
     async def initialize(self) -> None:
         """
         Initialize the scraper (start browser, login if needed).
@@ -302,8 +304,11 @@ class LinkedInScraper:
 
                 if not success:
                     raise ScraperError(
-                        message="Failed to login to LinkedIn",
-                        details={"email": self.config.email},
+                        message="Login failed: Could not authenticate with LinkedIn. Please verify your email and password are correct.",
+                        details={
+                            "email": self.config.email,
+                            "hint": "Check LINKEDIN_EMAIL and LINKEDIN_PASSWORD environment variables",
+                        },
                     )
 
             self._is_initialized = True
@@ -331,6 +336,7 @@ class LinkedInScraper:
         except Exception as e:
             logger.error("cleanup_error", error=str(e))
 
+    @observe(name="linkedin_scraper.scrape_messages")
     async def scrape_messages(
         self, limit: int | None = None, unread_only: bool = True
     ) -> list[LinkedInMessage]:

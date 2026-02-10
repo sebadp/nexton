@@ -23,6 +23,7 @@ from app.observability.tracing import (
     add_span_attributes,
     add_span_event,
     get_tracer,
+    observe,
     set_span_error,
     setup_tracing,
 )
@@ -31,6 +32,7 @@ __all__ = [
     # Tracing
     "setup_tracing",
     "get_tracer",
+    "observe",
     "TracingContext",
     "add_span_attributes",
     "add_span_event",

@@ -125,6 +125,7 @@ All running on **your infrastructure** with **full observability** and **product
 - **Tiered Classification**: A/B/C/D tier system for opportunity prioritization
 - **Multi-Model Support**: Use OpenAI, Anthropic, or Ollama (local/free) for LLM processing
 - **Context-Aware Responses**: Generates human-like responses that mirror language and tone
+- **Real-time Granular Streaming**: Watch the AI analyze messages step-by-step (extracting, scoring, drafting) in real-time via Server-Sent Events (SSE)
 
 ### 🔄 Complete Automation Workflow
 
@@ -206,6 +207,7 @@ After starting the application, open **http://localhost:3000**
 
 - **Scan LinkedIn Button**: Trigger scraping directly from the dashboard
 - **Real-time Status**: See scraping progress and health status
+- **Toast Notifications**: User-friendly messages for scraping results (success, no messages, errors)
 - **Smart Filtering**: Filter opportunities by tier, status, score, company
 - **Response Management**: Review AI responses before sending
 - **Profile Editor**: Visual editor for all your preferences

@@ -32,3 +32,4 @@ structlog>=24.1.0
 # Utilities
 tenacity>=8.2.3
 python-dateutil>=2.8.2
+langfuse>=2.0.0

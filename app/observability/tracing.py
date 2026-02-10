@@ -14,6 +14,24 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
+try:
+    from langfuse import observe
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Langfuse not found, using dummy observer. Install langfuse for granular tracing."
+    )
+
+    # Fallback for when langfuse is not installed or enabled
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
+
+
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -53,7 +71,7 @@ def setup_tracing(app=None) -> None:
             tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info(
                 "otlp_exporter_configured",
-                endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+                extra={"endpoint": settings.OTEL_EXPORTER_OTLP_ENDPOINT},
             )
 
         # Add console exporter for development
@@ -87,12 +105,14 @@ def setup_tracing(app=None) -> None:
 
         logger.info(
             "opentelemetry_initialized",
-            service_name=settings.OTEL_SERVICE_NAME,
-            environment=settings.ENV,
+            extra={
+                "service_name": settings.OTEL_SERVICE_NAME,
+                "environment": settings.ENV,
+            },
         )
 
     except Exception as e:
-        logger.error("opentelemetry_setup_failed", error=str(e))
+        logger.error("opentelemetry_setup_failed", extra={"error": str(e)})
         # Don't fail application startup if tracing fails
         raise
 

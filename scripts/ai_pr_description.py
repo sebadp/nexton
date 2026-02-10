@@ -213,27 +213,60 @@ def main():
     configure_llm()
     describer = dspy.Predict(PRDescriber)
 
-    try:
-        result = describer(
-            diff=diff_content, context="Python project using FastAPI, DSPy, SqlAlchemy"
-        )
-        content = result.content
+    # Retry logic for RateLimitError
+    max_retries = 3
+    base_delay = 2
 
+    # Truncate diff if too long to save tokens
+    max_diff_length = 20000  # Approx 5k-6k tokens
+    if len(diff_content) > max_diff_length:
+        print(
+            f"Warning: Diff is too large ({len(diff_content)} chars). Truncating to {max_diff_length} chars."
+        )
+        diff_content = diff_content[:max_diff_length] + "\n... (Diff truncated) ..."
+
+    for attempt in range(max_retries):
+        try:
+            print(f"Generating description (Attempt {attempt + 1}/{max_retries})...")
+            result = describer(
+                diff=diff_content, context="Python project using FastAPI, DSPy, SqlAlchemy"
+            )
+            content = result.content
+            break
+        except Exception as e:
+            # Check for rate limit error in string representation or type
+            error_str = str(e).lower()
+            if (
+                "ratelimit" in error_str
+                or "quota" in error_str
+                or "429" in error_str
+                or "resource_exhausted" in error_str
+            ):
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + (
+                        0.1 * attempt
+                    )  # Exponential backoff + jitter
+                    print(f"Rate limit hit. Retrying in {delay}s...")
+                    import time
+
+                    time.sleep(delay)
+                    continue
+
+            # If not rate limit or retries exhausted, re-raise
+            print(f"AI Description generation failed: {e}")
+            sys.exit(1)
+
+    try:
         print(f"Generated Title: {content.title}")
 
         # Update PR
-        # Only update if description is empty or user requested it?
-        # For now, we will append or just overwrite title + body.
-        # Let's overwrite title if strictly better, but maybe just set it if it's default?
-        # Safe bet: Update body, suggest title in body?
-        # Requirement: "make the agent generate a description".
-
         pr.edit(title=content.title, body=content.description)
         print("PR updated successfully.")
 
     except Exception as e:
-        print(f"AI Description generation failed: {e}")
-        sys.exit(1)
+        print(f"Failed to update PR: {e}")
+        print("Continuing without updating PR description (Soft Fail).")
+        sys.exit(0)
 
 
 if __name__ == "__main__":

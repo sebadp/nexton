@@ -5,10 +5,12 @@ Business logic for opportunity management, integrating DSPy pipeline,
 caching, and database operations.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextvars import copy_context
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.cache import CacheKeys, RedisCache, generate_message_hash
 from app.core.exceptions import OpportunityNotFoundError, PipelineError
@@ -19,9 +21,9 @@ from app.dspy_modules.models import OpportunityResult
 from app.dspy_modules.pipeline import get_pipeline
 from app.dspy_modules.profile_loader import get_profile
 from app.observability import (
-    TracingContext,
     add_span_attributes,
     add_span_event,
+    observe,
     track_opportunity_created,
     track_opportunity_processing_time,
     track_opportunity_score,
@@ -59,12 +61,14 @@ class OpportunityService:
 
         logger.debug("opportunity_service_initialized")
 
+    @observe(name="opportunity_service.create_opportunity")
     async def create_opportunity(
         self,
         recruiter_name: str,
         raw_message: str,
         message_timestamp: datetime | None = None,
         use_cache: bool = True,
+        on_progress: Callable[[str, dict], None] | None = None,
     ) -> Opportunity:
         """
         Create and process a new opportunity.
@@ -79,6 +83,7 @@ class OpportunityService:
             recruiter_name: Name of the recruiter
             raw_message: Raw message content
             use_cache: Whether to use cache (default: True)
+            on_progress: Optional callback for progress updates
 
         Returns:
             Created opportunity
@@ -103,39 +108,38 @@ class OpportunityService:
 
             # Try to get from cache
             if use_cache:
-                with TracingContext("cache.get", {"cache_key": cache_key}):
-                    try:
-                        cached_result = await self.cache.get(cache_key)
-                        if cached_result:
-                            pipeline_result = OpportunityResult(**cached_result)
-                            logger.info("pipeline_result_from_cache", message_hash=message_hash)
-                            add_span_event("cache_hit", {"message_hash": message_hash})
-                            track_pipeline_execution("cached", 0.0)
-                    except Exception as e:
-                        logger.warning("cache_get_failed", error=str(e))
+                try:
+                    cached_result = await self.cache.get(cache_key)
+                    if cached_result:
+                        pipeline_result = OpportunityResult(**cached_result)
+                        logger.info("pipeline_result_from_cache", message_hash=message_hash)
+                        add_span_event("cache_hit", {"message_hash": message_hash})
+                        track_pipeline_execution("cached", 0.0)
+                except Exception as e:
+                    logger.warning("cache_get_failed", error=str(e))
 
             # Run pipeline if not cached
             if pipeline_result is None:
                 pipeline_start = datetime.utcnow()
 
-                with TracingContext(
-                    "dspy.pipeline.forward",
-                    {
-                        "message_length": len(raw_message),
-                        "recruiter_name": recruiter_name,
-                    },
-                ):
-                    pipeline_result = self.pipeline.forward(
-                        message=raw_message,
-                        recruiter_name=recruiter_name,
-                        profile=self.profile,
-                    )
+                # Run blocking DSPy pipeline in threadpool to allow streaming
+                # Use copy_context().run to propagate OTel/Langfuse context to the thread
+                ctx = copy_context()
+                pipeline_result = await run_in_threadpool(
+                    ctx.run,
+                    self.pipeline,  # Call via __call__ to fix DSPy warning
+                    message=raw_message,
+                    recruiter_name=recruiter_name,
+                    profile=self.profile,
+                    on_progress=on_progress,
+                )
+                assert pipeline_result is not None
 
-                    add_span_attributes(
-                        score=pipeline_result.scoring.total_score,
-                        tier=pipeline_result.scoring.tier,
-                        company=pipeline_result.extracted.company,
-                    )
+                add_span_attributes(
+                    score=pipeline_result.scoring.total_score,
+                    tier=pipeline_result.scoring.tier,
+                    company=pipeline_result.extracted.company,
+                )
 
                 # Track pipeline execution metrics
                 pipeline_duration = (datetime.utcnow() - pipeline_start).total_seconds()
@@ -143,43 +147,38 @@ class OpportunityService:
 
                 # Cache the result
                 if use_cache:
-                    with TracingContext("cache.set", {"cache_key": cache_key}):
-                        try:
-                            await self.cache.set(
-                                cache_key,
-                                pipeline_result.dict(),
-                                ttl=CacheKeys.TTL_LONG,
-                            )
-                            logger.debug("pipeline_result_cached", message_hash=message_hash)
-                        except Exception as e:
-                            logger.warning("cache_set_failed", error=str(e))
+                    try:
+                        await self.cache.set(
+                            cache_key,
+                            pipeline_result.dict(),
+                            ttl=CacheKeys.TTL_LONG,
+                        )
+                        logger.debug("pipeline_result_cached", message_hash=message_hash)
+                    except Exception as e:
+                        logger.warning("cache_set_failed", error=str(e))
 
             # Calculate processing time
             processing_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
             # Create opportunity in database
-            with TracingContext(
-                "db.create_opportunity",
-                {
-                    "company": pipeline_result.extracted.company,
-                    "role": pipeline_result.extracted.role,
-                    "total_score": pipeline_result.scoring.total_score,
-                    "tier": pipeline_result.scoring.tier,
-                },
-            ):
-                # Use to_db_dict to ensure all metadata is correctly mapped
-                # (processing_status, conversation_state, hard_filter_results, etc.)
-                opp_data = pipeline_result.to_db_dict()
+            # Use to_db_dict to ensure all metadata is correctly mapped
+            # (processing_status, conversation_state, hard_filter_results, etc.)
+            opp_data = pipeline_result.to_db_dict()
 
-                # Override specific fields
-                opp_data["status"] = "processed"  # Lifecycle status is always processed here
-                opp_data["processing_time_ms"] = processing_time_ms
-                opp_data["message_timestamp"] = message_timestamp
+            # Override specific fields
+            opp_data["status"] = "processed"  # Lifecycle status is always processed here
+            opp_data["processing_time_ms"] = processing_time_ms
+            opp_data["message_timestamp"] = message_timestamp
 
-                opportunity = await self.repository.create(**opp_data)
+            # Create opportunity with manual tracing attributes if needed,
+            # but relying on @observe decorator on the repository method would be better.
+            # However, OpportunityRepository.create doesn't seem to be decorated.
+            # But the Service method create_opportunity IS decorated.
 
-                await self.db.commit()
-                add_span_event("opportunity_created", {"opportunity_id": opportunity.id})
+            opportunity = await self.repository.create(**opp_data)
+
+            await self.db.commit()
+            add_span_event("opportunity_created", {"opportunity_id": opportunity.id})
 
             # Track opportunity metrics
             track_opportunity_created(tier=opportunity.tier or "Unknown", status=opportunity.status)

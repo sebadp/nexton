@@ -10,10 +10,12 @@ from app.core.config import settings
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
 from app.dspy_modules.models import CandidateProfile
+from app.observability import observe
 
 logger = get_logger(__name__)
 
 
+@observe(name="profile_loader.load")
 def load_profile(profile_path: str | None = None) -> CandidateProfile:
     """
     Load candidate profile from YAML file.

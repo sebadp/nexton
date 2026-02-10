@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from langfuse import Langfuse
 
 # Import routers
 from app.api import v1
@@ -18,6 +19,9 @@ from app.database.base import close_db, init_db
 from app.observability import setup_metrics, setup_tracing
 
 logger = get_logger(__name__)
+
+# Initialize Langfuse client globally if needed for manual flushing
+langfuse = Langfuse()
 
 
 @asynccontextmanager
@@ -59,6 +63,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("application_shutting_down")
+
+    # Flush Langfuse traces
+    if settings.LANGFUSE_SECRET_KEY:
+        try:
+            logger.info("flushing_langfuse_traces")
+            langfuse.flush()
+        except Exception as e:
+            logger.error("langfuse_flush_failed", error=str(e))
+
     await close_db()
 
 
