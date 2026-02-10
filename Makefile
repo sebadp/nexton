@@ -146,6 +146,9 @@ coverage:  ## Generate coverage report
 load-test:  ## Run load tests
 	docker-compose exec app locust -f tests/performance/locustfile.py --headless -u 100 -r 10 -t 60s --host http://localhost:8000
 
+test-evals:  ## Run DSPy evaluation script (requires docker up)
+	docker-compose -f docker-compose.lite.yml exec app python scripts/run_evals.py
+
 # ==========================================
 # CODE QUALITY
 # ==========================================
@@ -429,6 +432,12 @@ rebuild-lite:  ## Rebuild and restart all lite services
 	docker-compose -f docker-compose.lite.yml build
 	docker-compose -f docker-compose.lite.yml up -d
 	@echo "✅ Lite services rebuilt and restarted!"
+
+rebuild-lite-logs:  ## Rebuild and start lite version with logs (foreground)
+	@echo "🔄 Rebuilding LITE version..."
+	docker-compose -f docker-compose.lite.yml build
+	@echo "🔄 Starting LITE version with logs..."
+	docker-compose -f docker-compose.lite.yml up
 
 rebuild-lite-frontend:  ## Rebuild and restart frontend only (lite)
 	@echo "🔄 Rebuilding frontend..."

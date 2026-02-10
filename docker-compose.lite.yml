@@ -79,8 +79,12 @@ services:
       - LINKEDIN_EMAIL=${LINKEDIN_EMAIL}
       - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
       - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
-      # Observability deshabilitado
+      # Observability
       - OTEL_ENABLED=false
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST}
+      - LANGFUSE_DEBUG=True
       - PROFILE_PATH=/app/config/profile.yaml
     volumes:
       - ./app:/app/app

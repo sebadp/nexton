@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     OTEL_EXCLUDED_URLS: str = "/health,/metrics,/docs,/redoc,/openapi.json"
     PROMETHEUS_MULTIPROC_DIR: str = "/tmp/prometheus"
 
+    # Langfuse (Observability & Evals)
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_HOST: str | None = "https://cloud.langfuse.com"
+
     # LinkedIn
     LINKEDIN_EMAIL: str = ""
     LINKEDIN_PASSWORD: str = ""

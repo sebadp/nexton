@@ -12,6 +12,7 @@ import dspy
 from app.core.logging import get_logger
 from app.dspy_modules.models import CandidateProfile, ExtractedData, ScoringResult
 from app.dspy_modules.signatures import ScoringSignature
+from app.observability import observe
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,7 @@ class Scorer(dspy.Module):
         super().__init__()
         self.score = dspy.ChainOfThought(ScoringSignature)
 
+    @observe(name="dspy.scorer.forward")
     def forward(
         self,
         extracted: ExtractedData,

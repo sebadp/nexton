@@ -10,6 +10,7 @@ import dspy
 from app.core.logging import get_logger
 from app.dspy_modules.models import CandidateStatus, ExtractedData, HardFilterResult, ScoringResult
 from app.dspy_modules.signatures import ResponseGenerationSignature
+from app.observability import observe
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,7 @@ class ResponseGenerator(dspy.Module):
         super().__init__()
         self.generate = dspy.ChainOfThought(ResponseGenerationSignature)
 
+    @observe(name="dspy.response_generator.forward")
     def forward(
         self,
         recruiter_name: str,

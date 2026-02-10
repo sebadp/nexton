@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.observability import observe
 from app.scraper import LinkedInScraper, ScraperConfig
 
 logger = get_logger(__name__)
@@ -35,6 +36,7 @@ class ScrapingService:
         self.db = db
         self._scraper: LinkedInScraper | None = None
 
+    @observe(name="scraping_service.scrape_sync")
     async def scrape_sync(
         self,
         limit: int = 10,
@@ -180,6 +182,7 @@ class ScrapingService:
                 await self._scraper.cleanup()
                 self._scraper = None
 
+    @observe(name="scraping_service.scrape_with_progress")
     async def scrape_with_progress(
         self,
         limit: int = 10,

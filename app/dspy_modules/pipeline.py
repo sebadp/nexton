@@ -6,6 +6,7 @@ This is the main entry point for processing LinkedIn recruiter messages.
 
 import time
 from collections.abc import Callable
+from typing import cast
 
 import dspy
 
@@ -29,6 +30,7 @@ from app.dspy_modules.models import (
 )
 from app.dspy_modules.response_generator import ResponseGenerator
 from app.dspy_modules.scorer import Scorer
+from app.observability import observe
 
 logger = get_logger(__name__)
 
@@ -66,6 +68,7 @@ class OpportunityPipeline(dspy.Module):
 
         logger.info("opportunity_pipeline_initialized")
 
+    @observe(name="dspy.pipeline.forward")
     def forward(
         self,
         message: str,
@@ -160,14 +163,17 @@ class OpportunityPipeline(dspy.Module):
 
             # Handle FOLLOW_UP messages differently - skip hard filters, use FollowUpAnalyzer
             if conversation_state.state == ConversationState.FOLLOW_UP:
-                return self._handle_follow_up(
-                    message=message,
-                    recruiter_name=recruiter_name,
-                    profile=profile,
-                    profile_dict=profile_dict,
-                    conversation_state=conversation_state,
-                    start_time=start_time,
-                    on_progress=on_progress,
+                return cast(
+                    OpportunityResult,
+                    self._handle_follow_up(
+                        message=message,
+                        recruiter_name=recruiter_name,
+                        profile=profile,
+                        profile_dict=profile_dict,
+                        conversation_state=conversation_state,
+                        start_time=start_time,
+                        on_progress=on_progress,
+                    ),
                 )
 
             # --- Normal flow for NEW_OPPORTUNITY ---
@@ -298,6 +304,7 @@ class OpportunityPipeline(dspy.Module):
                 },
             ) from e
 
+    @observe(name="dspy.pipeline.handle_follow_up")
     def _handle_follow_up(
         self,
         message: str,
@@ -474,6 +481,10 @@ def configure_dspy(
             )
         else:
             raise ValueError(f"Unsupported provider: {provider_type}")
+
+        # Callbacks (deprecated/removed in this version of langfuse)
+        # We rely on the @observe decorator for now, as CallbackHandler is not available
+        # in the installed SDK version via the expected import path.
 
         # Set as default LM for DSPy
         dspy.settings.configure(lm=lm)

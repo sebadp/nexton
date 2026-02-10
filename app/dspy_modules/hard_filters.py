@@ -12,6 +12,7 @@ from app.dspy_modules.models import (
     HardFilterResult,
     ScoringResult,
 )
+from app.observability import observe
 
 logger = get_logger(__name__)
 
@@ -254,6 +255,7 @@ def check_reject_criteria(
     return True, None
 
 
+@observe(name="hard_filters.apply")
 def apply_hard_filters(
     extracted: ExtractedData,
     scoring: ScoringResult,
@@ -335,12 +337,19 @@ def apply_hard_filters(
         or any("rejection criterion" in f.lower() for f in failed_filters)  # Matched rejection
     )
 
+    # Construct reasoning
+    if not failed_filters:
+        reasoning = "Passed all hard criteria (Work week, Salary, Tech stack)."
+    else:
+        reasoning = f"Failed {len(failed_filters)} criteria: {'; '.join(failed_filters)}"
+
     result = HardFilterResult(
         passed=len(failed_filters) == 0,
         failed_filters=failed_filters,
         score_penalty=min(score_penalty, 100),
         should_decline=should_decline,
         work_week_status=work_week_status,
+        reasoning=reasoning,
     )
 
     logger.info(

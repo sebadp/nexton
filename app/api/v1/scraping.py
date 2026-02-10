@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.observability import observe
+
 router = APIRouter(prefix="/scraping", tags=["scraping"])
 
 
@@ -51,6 +53,7 @@ _scraping_state: dict[str, bool | str | int | None | dict] = {
 
 
 @router.post("/trigger", response_model=ScrapingTriggerResponse)
+@observe(name="api.scraping.trigger")
 async def trigger_scraping(
     request: ScrapingTriggerRequest = ScrapingTriggerRequest(),
 ) -> ScrapingTriggerResponse:
@@ -84,6 +87,7 @@ async def trigger_scraping(
 
 
 @router.get("/trigger/stream")
+@observe(name="api.scraping.trigger_stream")
 async def trigger_scraping_stream(
     limit: int = 20,
     unread_only: bool = True,

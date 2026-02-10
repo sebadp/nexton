@@ -20,6 +20,7 @@ from app.dspy_modules.signatures import (
     FollowUpAnalysisSignature,
     MessageAnalysisSignature,
 )
+from app.observability import observe
 
 logger = get_logger(__name__)
 
@@ -81,6 +82,7 @@ class ConversationStateAnalyzer(dspy.Module):
         super().__init__()
         self.analyze = dspy.ChainOfThought(ConversationStateSignature)
 
+    @observe(name="dspy.conversation_state_analyzer.forward")
     def forward(self, message: str) -> ConversationStateResult:
         """
         Analyze message to determine conversation state.
@@ -216,6 +218,7 @@ class MessageAnalyzer(dspy.Module):
         super().__init__()
         self.analyze = dspy.ChainOfThought(MessageAnalysisSignature)
 
+    @observe(name="dspy.message_analyzer.forward")
     def forward(self, message: str) -> ExtractedData:
         """
         Analyze message and extract structured data.
@@ -470,6 +473,7 @@ class FollowUpAnalyzer(dspy.Module):
         super().__init__()
         self.analyze = dspy.ChainOfThought(FollowUpAnalysisSignature)
 
+    @observe(name="dspy.follow_up_analyzer.forward")
     def forward(self, message: str, profile_dict: dict) -> FollowUpAnalysisResult:
         """
         Analyze a follow-up message to determine if it can be auto-responded.
