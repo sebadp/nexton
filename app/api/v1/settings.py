@@ -5,7 +5,7 @@ Settings API endpoints for managing application configuration.
 import os
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 
@@ -37,8 +37,8 @@ class UpdateSettingsRequest(BaseModel):
 
     llm_provider: str | None = None
     llm_model: str | None = None
-    llm_temperature: float | None = None
-    llm_temperature_generation: float | None = None
+    llm_temperature: float | None = Field(None, ge=0.0, le=2.0)
+    llm_temperature_generation: float | None = Field(None, ge=0.0, le=2.0)
     linkedin_email: str | None = None
     linkedin_password: str | None = None
     smtp_host: str | None = None

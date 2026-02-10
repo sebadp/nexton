@@ -415,11 +415,17 @@ class OpportunityPipeline(dspy.Module):
         """
         logger.info("refreshing_pipeline_configuration")
 
-        # Re-initialize creative LM
+        # 1. Re-configure global DSPy settings (updates the main/analysis LM)
+        configure_dspy()
+
+        # 2. Re-initialize creative LM (updates the generation LM)
         self.creative_lm = create_lm(temperature=settings.LLM_TEMPERATURE_GENERATION)
 
         logger.info(
-            "pipeline_configuration_refreshed", creative_temp=settings.LLM_TEMPERATURE_GENERATION
+            "pipeline_configuration_refreshed",
+            provider=settings.LLM_PROVIDER,
+            analysis_temp=settings.LLM_TEMPERATURE,
+            creative_temp=settings.LLM_TEMPERATURE_GENERATION,
         )
 
 
@@ -456,6 +462,9 @@ def create_lm(
             temperature=temperature,
         )
     elif provider_type == "openai":
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
+
         model_string = f"openai/{model_name}"
         return dspy.LM(
             model=model_string,
@@ -463,6 +472,9 @@ def create_lm(
             temperature=temperature,
         )
     elif provider_type == "anthropic":
+        if not settings.ANTHROPIC_API_KEY:
+            raise ValueError("ANTHROPIC_API_KEY is required for Anthropic provider")
+
         model_string = f"anthropic/{model_name}"
         return dspy.LM(
             model=model_string,
