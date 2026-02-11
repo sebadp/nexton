@@ -98,6 +98,7 @@ class Settings(BaseSettings):
     SCRAPER_MAX_RETRIES: int = 3
     SCRAPER_RATE_LIMIT: int = 10
     SCRAPER_COOLDOWN: int = 300
+    SCRAPER_MESSAGE_LIMIT: int = 20
 
     # User Profile
     PROFILE_PATH: str = "config/profile.yaml"

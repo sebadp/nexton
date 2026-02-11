@@ -5,6 +5,7 @@ import {
   approveResponse,
   editResponse,
   declineResponse,
+  updateResponseFeedback,
 } from "@/api"
 
 export function usePendingResponses(skip: number = 0, limit: number = 10) {
@@ -60,6 +61,25 @@ export function useDeclineResponse() {
       queryClient.invalidateQueries({ queryKey: ["pendingResponses"] })
       queryClient.invalidateQueries({ queryKey: ["response", opportunityId] })
       queryClient.invalidateQueries({ queryKey: ["opportunity", opportunityId] })
+    },
+  })
+}
+
+export function useUpdateResponseFeedback() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      responseId,
+      feedback,
+    }: {
+      responseId: number
+      feedback: { feedback_score: number; feedback_notes?: string }
+    }) => updateResponseFeedback(responseId, feedback),
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["response"] }) // Generic invalidation
+      queryClient.invalidateQueries({ queryKey: ["pendingResponses"] })
     },
   })
 }

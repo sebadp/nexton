@@ -49,3 +49,14 @@ export async function declineResponse(opportunityId: number): Promise<PendingRes
   )
   return response.data
 }
+
+export async function updateResponseFeedback(
+  responseId: number,
+  feedback: { feedback_score: number; feedback_notes?: string }
+): Promise<PendingResponse> {
+  const response = await apiClient.patch<PendingResponse>(
+    `/responses/${responseId}/feedback`,
+    feedback
+  )
+  return response.data
+}

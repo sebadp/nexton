@@ -279,6 +279,41 @@ class LinkedInScraper:
             headless=config.headless,
         )
 
+    # Selectors for unread status
+    UNREAD_SELECTORS = [
+        '[data-test-icon="unseen-icon"]',
+        '[class*="unseen"]',
+        '[class*="unread"]',
+        'div[class*="notification-badge"]',
+        'li[class*="--unread"]',  # Common pattern
+    ]
+
+    async def _count_visible_unread(self, conversations: list) -> int:
+        """
+        Count how many of the visible conversations are unread.
+
+        Args:
+            conversations: List of conversation elements
+
+        Returns:
+            Count of unread conversations
+        """
+        count = 0
+        for conv in conversations:
+            is_unread = False
+            for selector in self.UNREAD_SELECTORS:
+                try:
+                    indicator = await conv.query_selector(selector)
+                    if indicator:
+                        is_unread = True
+                        break
+                except Exception:
+                    continue
+
+            if is_unread:
+                count += 1
+        return count
+
     @observe(name="linkedin_scraper.initialize")
     async def initialize(self) -> None:
         """
@@ -394,7 +429,7 @@ class LinkedInScraper:
                 # If no container found, try to get conversations directly
                 logger.warning("conversation_container_not_found_trying_direct_selector")
 
-            # Get all conversation items - try multiple selectors
+            # Get all conversation items - try multiple selectors and scroll if needed
             conversation_selectors = [
                 'li[class*="msg-conversation-listitem"]',
                 "li.msg-conversation-listitem__link",
@@ -403,12 +438,111 @@ class LinkedInScraper:
             ]
 
             conversations = []
+            selector_used = None
+
+            # First find which selector works
             for selector in conversation_selectors:
-                conversations = await page.query_selector_all(selector)
-                if conversations:
-                    logger.info("conversations_found", selector=selector, count=len(conversations))
+                initial_items = await page.query_selector_all(selector)
+                if initial_items:
+                    selector_used = selector
+                    logger.info(
+                        "conversations_found_with_selector",
+                        selector=selector,
+                        count=len(initial_items),
+                    )
+                    conversations = initial_items
                     break
-                logger.debug("conversation_selector_not_found", selector=selector)
+
+            if not selector_used:
+                logger.warning("conversation_selector_not_found_on_initial_load")
+            else:
+                # SCROLLING LOGIC: Scroll until we have enough conversations
+                # We need enough items to potentially meet the limit
+                target_count = limit if limit else 20
+                # Increase max attempts to allow for longer lists
+                max_scroll_attempts = 25  # Increased slightly more
+                scroll_count = 0
+
+                # Determine initial count based on filter
+                current_qualified_count = len(conversations)
+                if unread_only:
+                    current_qualified_count = await self._count_visible_unread(conversations)
+
+                logger.info(
+                    "starting_scroll_loop",
+                    total_visible=len(conversations),
+                    qualified_count=current_qualified_count,
+                    target=target_count,
+                    unread_only=unread_only,
+                )
+
+                while current_qualified_count < target_count and scroll_count < max_scroll_attempts:
+                    # Get the last item to scroll into view
+                    if conversations:
+                        last_item = conversations[-1]
+                        try:
+                            await last_item.scroll_into_view_if_needed()
+                            # Small shimmy to ensure visibility triggers
+                            await page.mouse.wheel(0, 100)
+                            await asyncio.sleep(0.5)
+                        except Exception as e:
+                            logger.debug("scroll_to_last_item_failed", error=str(e))
+
+                    # Also scroll the container hard to bottom as backup
+                    if conversation_container:
+                        await conversation_container.evaluate(
+                            "(element) => element.scrollTop = element.scrollHeight"
+                        )
+                    else:
+                        # Fallback: Scroll window
+                        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
+                    # Wait for load - slightly longer to be safe
+                    await asyncio.sleep(3)
+
+                    # check for new items
+                    new_conversations = await page.query_selector_all(selector_used)
+
+                    if not new_conversations:
+                        # Attempt to recover if selector failed purely on timing
+                        await asyncio.sleep(2)
+                        new_conversations = await page.query_selector_all(selector_used)
+
+                    # Update qualified count
+                    new_qualified_count = len(new_conversations)
+                    if unread_only and new_conversations:
+                        new_qualified_count = await self._count_visible_unread(new_conversations)
+
+                    logger.debug(
+                        "scroll_attempt_result",
+                        attempt=scroll_count + 1,
+                        previous_qualified=current_qualified_count,
+                        new_qualified=new_qualified_count,
+                        total_visible=len(new_conversations),
+                    )
+
+                    if new_qualified_count > current_qualified_count:
+                        # We found new QUALIFIED items!
+                        pass
+                    elif len(new_conversations) > len(conversations):
+                        # We found new items, but none were qualified (e.g. read messages).
+                        # We should continue scrolling to find unread ones.
+                        pass
+                    else:
+                        logger.info("scrolling_yielded_no_new_items", count=len(new_conversations))
+                        # Try one more valid attempt before giving up
+                        if scroll_count < max_scroll_attempts - 1:
+                            await asyncio.sleep(2)
+
+                    conversations = new_conversations
+                    current_qualified_count = new_qualified_count
+                    if not conversations:
+                        current_qualified_count = 0
+
+                    scroll_count += 1
+
+            if not conversations:
+                logger.debug("conversation_selector_not_found", selector=conversation_selectors)
 
             # If still no conversations found, save debug info
             if not conversations:
@@ -451,20 +585,15 @@ class LinkedInScraper:
                 try:
                     # Check if conversation is unread (if filtering)
                     if unread_only:
-                        # Try multiple selectors for unread indicator
-                        unread_selectors = [
-                            '[data-test-icon="unseen-icon"]',
-                            '[class*="unseen"]',
-                            '[class*="unread"]',
-                            'div[class*="notification-badge"]',
-                        ]
-
                         is_unread = False
-                        for selector in unread_selectors:
+                        for selector in self.UNREAD_SELECTORS:
                             unread_indicator = await conversation.query_selector(selector)
                             if unread_indicator:
                                 is_unread = True
                                 break
+
+                        if not is_unread:
+                            continue
 
                         if not is_unread:
                             continue

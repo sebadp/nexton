@@ -17,7 +17,7 @@ router = APIRouter(prefix="/scraping", tags=["scraping"])
 class ScrapingTriggerRequest(BaseModel):
     """Request to trigger scraping."""
 
-    limit: int = 20
+    limit: int | None = None
     unread_only: bool = True
     send_email: bool = False  # Disabled by default since we have frontend
 
@@ -89,7 +89,7 @@ async def trigger_scraping(
 @router.get("/trigger/stream")
 @observe(name="api.scraping.trigger_stream")
 async def trigger_scraping_stream(
-    limit: int = 20,
+    limit: int | None = None,
     unread_only: bool = True,
 ) -> StreamingResponse:
     """
@@ -131,8 +131,10 @@ async def trigger_scraping_stream(
             async with AsyncSessionLocal() as db:
                 service = ScrapingService(db)
 
+                final_limit = limit or settings.SCRAPER_MESSAGE_LIMIT
+
                 async for event in service.scrape_with_progress(
-                    limit=limit,
+                    limit=final_limit,
                     unread_only=unread_only,
                 ):
                     event_type = event.get("event", "message")
@@ -183,9 +185,13 @@ async def _trigger_lite_mode_scraping(
     try:
         # Get database session
         async for db in get_db():
+            from app.core.config import settings
+
+            limit = request.limit or settings.SCRAPER_MESSAGE_LIMIT
+
             service = ScrapingService(db)
             result = await service.scrape_sync(
-                limit=request.limit,
+                limit=limit,
                 unread_only=request.unread_only,
             )
 
@@ -238,9 +244,11 @@ async def _trigger_full_mode_scraping(
         if request.send_email:
             task = scrape_and_send_daily_summary.delay()
         else:
-            task = scrape_linkedin_messages.delay(
-                limit=request.limit, unread_only=request.unread_only
-            )
+            from app.core.config import settings
+
+            limit = request.limit or settings.SCRAPER_MESSAGE_LIMIT
+
+            task = scrape_linkedin_messages.delay(limit=limit, unread_only=request.unread_only)
 
         _scraping_state["current_task_id"] = task.id
 

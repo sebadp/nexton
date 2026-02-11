@@ -16,7 +16,10 @@ from app.database.base import Base
 from app.database.models import Opportunity
 from app.main import app
 
-# Disable observability in tests
+# Disable observability in tests to prevent:
+# 1. Spamming Langfuse with test traces
+# 2. slowing down tests with network calls
+# 3. Requiring API keys in CI/CD environment
 settings.OTEL_ENABLED = False
 settings.LANGFUSE_SECRET_KEY = None
 settings.DATABASE_URL = (

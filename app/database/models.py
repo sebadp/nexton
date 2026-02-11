@@ -257,6 +257,18 @@ class PendingResponse(Base):
         comment="Final response that was/will be sent",
     )
 
+    # Feedback Loop (NEW)
+    feedback_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="1 = Good Response, -1 = Bad Response, 0 = Neutral",
+    )
+    feedback_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="User comments on the response quality",
+    )
+
     # Status Tracking
     status: Mapped[str] = mapped_column(
         String(50),
@@ -318,6 +330,8 @@ class PendingResponse(Base):
             "original_response": self.original_response,
             "edited_response": self.edited_response,
             "final_response": self.final_response,
+            "feedback_score": self.feedback_score,
+            "feedback_notes": self.feedback_notes,
             "status": self.status,
             "approved_at": self.approved_at.isoformat() if self.approved_at else None,
             "declined_at": self.declined_at.isoformat() if self.declined_at else None,

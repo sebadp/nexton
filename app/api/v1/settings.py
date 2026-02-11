@@ -24,6 +24,7 @@ class SettingsResponse(BaseModel):
     llm_temperature: float
     llm_temperature_generation: float
     linkedin_email: str
+    scraper_message_limit: int
     linkedin_password_set: bool
     smtp_host: str
     smtp_port: int
@@ -41,6 +42,7 @@ class UpdateSettingsRequest(BaseModel):
     llm_temperature_generation: float | None = Field(None, ge=0.0, le=2.0)
     linkedin_email: str | None = None
     linkedin_password: str | None = None
+    scraper_message_limit: int | None = Field(None, ge=1, le=100)
     smtp_host: str | None = None
     smtp_port: int | None = None
     notification_enabled: bool | None = None
@@ -60,6 +62,7 @@ async def get_settings() -> SettingsResponse:
         llm_temperature=settings.LLM_TEMPERATURE,
         llm_temperature_generation=settings.LLM_TEMPERATURE_GENERATION,
         linkedin_email=settings.LINKEDIN_EMAIL,
+        scraper_message_limit=settings.SCRAPER_MESSAGE_LIMIT,
         linkedin_password_set=bool(settings.LINKEDIN_PASSWORD),
         smtp_host=settings.SMTP_HOST,
         smtp_port=settings.SMTP_PORT,
@@ -96,14 +99,15 @@ async def update_settings(request: UpdateSettingsRequest) -> SettingsResponse:
             settings.LLM_TEMPERATURE_GENERATION = request.llm_temperature_generation
 
             # Refresh pipeline to use new creative LM
-            from app.dspy_modules.pipeline import get_pipeline
-
-            pipeline = get_pipeline()
-            pipeline.refresh_configuration()
+            _refresh_pipeline_config()
 
         if request.linkedin_email is not None:
             os.environ["LINKEDIN_EMAIL"] = request.linkedin_email
             settings.LINKEDIN_EMAIL = request.linkedin_email
+
+        if request.scraper_message_limit is not None:
+            os.environ["SCRAPER_MESSAGE_LIMIT"] = str(request.scraper_message_limit)
+            settings.SCRAPER_MESSAGE_LIMIT = request.scraper_message_limit
 
         if request.linkedin_password is not None:
             os.environ["LINKEDIN_PASSWORD"] = request.linkedin_password
@@ -131,3 +135,15 @@ async def update_settings(request: UpdateSettingsRequest) -> SettingsResponse:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}") from e
+
+
+def _refresh_pipeline_config() -> None:
+    """
+    Refresh pipeline configuration.
+
+    Helper function to reload the DSPy pipeline with new settings.
+    """
+    from app.dspy_modules.pipeline import get_pipeline
+
+    pipeline = get_pipeline()
+    pipeline.refresh_configuration()

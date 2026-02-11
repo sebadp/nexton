@@ -61,7 +61,7 @@ export function useScrapingStream(): UseScrapingStreamResult {
         setProgress(null)
     }, [stopStream])
 
-    const startStream = useCallback((limit = 20, unreadOnly = true) => {
+    const startStream = useCallback((limit?: number, unreadOnly = true) => {
         // Reset state
         setEvents([])
         setCurrentStep(null)
@@ -69,7 +69,12 @@ export function useScrapingStream(): UseScrapingStreamResult {
         setProgress(null)
         setIsStreaming(true)
 
-        const url = `/api/v1/scraping/trigger/stream?limit=${limit}&unread_only=${unreadOnly}`
+        const queryParams = new URLSearchParams({ unread_only: String(unreadOnly) })
+        if (limit !== undefined) {
+            queryParams.append("limit", String(limit))
+        }
+
+        const url = `/api/v1/scraping/trigger/stream?${queryParams.toString()}`
         const eventSource = new EventSource(url)
         eventSourceRef.current = eventSource
 

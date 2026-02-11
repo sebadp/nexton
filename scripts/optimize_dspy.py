@@ -1,10 +1,11 @@
+import argparse
 import asyncio
 import os
 import sys
 
 import dspy
 from dspy.teleprompt import BootstrapFewShot
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 # Add app to path
 sys.path.append(os.getcwd())
@@ -16,23 +17,46 @@ from app.dspy_modules.models import CandidateProfile, ExtractedData
 from app.dspy_modules.profile_loader import get_profile
 from app.dspy_modules.scorer import Scorer
 
-# Configure DSPy
-dspy.settings.configure(
-    lm=dspy.OpenAI(model=settings.LLM_MODEL, api_key=settings.OPENAI_API_KEY, max_tokens=2000)
-)
-
 OUTPUT_PATH = "app/dspy_modules/settings/scorer_compiled.json"
 
 
 async def fetch_training_examples() -> list[dspy.Example]:
     """
-    Fetch opportunities with positive feedback (score=1) and convert to DSPy examples.
+    Fetch opportunities with feedback and convert to DSPy examples.
+
+    Includes:
+    - Positive Feedback (score=1): Used as standard examples
+    - Negative Feedback (score=-1): Could be used with specific logic, but for BootstrapFewShot,
+      we typically provide "correct" examples. If feedback is -1, it means the *system's* previous
+      output was wrong.
+      To use these for training, we would need the *corrected* values from the user.
+
+      Current strategy:
+      - Load POSITIVE examples (Verified Good).
+      - If we had a mechanism to store "Corrected Label" along with negative feedback,
+        we would use that.
+      - For now, we will stick to Positive examples as "Gold Standard".
+      - However, per user request, we are fetching them to at least acknowledge existence
+        or potentially use them if we implement a "correction" flow later.
     """
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Opportunity).where(Opportunity.feedback_score == 1))
+        # Fetch positive (1) and explicit negative (-1)
+        result = await db.execute(
+            select(Opportunity).where(
+                or_(Opportunity.feedback_score == 1, Opportunity.feedback_score == -1)
+            )
+        )
         opportunities = result.scalars().all()
 
-    print(f"Found {len(opportunities)} positive feedback examples in DB.")
+    print(f"Found {len(opportunities)} feedback examples in DB.")
+
+    # helper stats
+    pos_count = sum(1 for o in opportunities if o.feedback_score == 1)
+    neg_count = sum(1 for o in opportunities if o.feedback_score == -1)
+    print(f"  - Positive (Thumbs Up): {pos_count}")
+    print(
+        f"  - Negative (Thumbs Down): {neg_count} (Skipped for training until correction logic is added)"
+    )
 
     # Load profile (Assuming single user profile for now)
     profile = get_profile()
@@ -49,9 +73,12 @@ async def fetch_training_examples() -> list[dspy.Example]:
 
     examples = []
     for opp in opportunities:
-        # Reconstruct ExtractedData from DB fields
-        # Note: In a real system, we might want the exact ExtractedData payload stored in DB
-        # For now, we assume the DB columns reflect the extracted data faithfully.
+        # Only use POSITIVE examples for few-shot demonstrations for now
+        # because we don't know what the "Right" answer is for a negative example
+        # unless the user provided it in notes (which is unstructured).
+        if opp.feedback_score != 1:
+            continue
+
         extracted = ExtractedData(
             company=opp.company,
             role=opp.role,
@@ -75,8 +102,6 @@ async def fetch_training_examples() -> list[dspy.Example]:
             salary_score=str(opp.salary_score),
             seniority_score=str(opp.seniority_score),
             company_score=str(opp.company_score),
-            # Note: We rely on the model generating its own reasoning,
-            # or we could use feedback_notes if they contained reasoning.
         ).with_inputs("extracted", "profile")
 
         examples.append(example)
@@ -88,20 +113,12 @@ def validate_score(example, pred, trace=None):
     """
     Metric to check if the predicted scores are close to the target scores.
     """
-    # Allow a small margin of error or require exact match?
-    # For integer scores, exact match or very close is preferred.
 
     def parse_score(val):
         try:
             return float(val)
         except (ValueError, TypeError):
             return 0.0
-
-    # derived scores from prediction
-    # Accessing internal fields of the prediction (which matches Signature)
-    # The 'pred' object here is the result of the Scorer.forward(), which returns ScoringResult.
-    # WAIT. BootstrapFewShot validation 'pred' is the return value of the module.
-    # Scorer returns ScoringResult object.
 
     try:
         # Check total score difference
@@ -121,7 +138,6 @@ def validate_score(example, pred, trace=None):
         return False
 
     except Exception:
-        # print(f"Metric error: {e}")
         return False
 
 
@@ -129,7 +145,7 @@ def train_scorer(trainset: list[dspy.Example]):
     """
     Train the Scorer module.
     """
-    print(f"Starting training Scorer with {len(trainset)} examples...")
+    print(f"Starting training Scorer with {len(trainset)} validated examples...")
 
     # max_bootstrapped_demos=2 means it will try to generate 2 full few-shot examples (input + thought + output)
     # matching the high quality metric.
@@ -147,11 +163,29 @@ def train_scorer(trainset: list[dspy.Example]):
 
 
 async def main():
+    parser = argparse.ArgumentParser(description="Optimize DSPy Scorer Module")
+    parser.add_argument("--model", type=str, help="LLM Model to use (overrides env)")
+    parser.add_argument("--api-key", type=str, help="API Key (overrides env)")
+    parser.add_argument("--limit", type=int, default=10, help="Limit examples (mock param for now)")
+
+    args = parser.parse_args()
+
+    # Resolve Configuration
+    model = args.model or settings.LLM_MODEL
+    api_key = args.api_key or settings.OPENAI_API_KEY
+
+    print(f"Configuring DSPy with model: {model}")
+
+    # Configure DSPy
+    dspy.settings.configure(
+        lm=dspy.OpenAI(model=model, api_key=api_key, max_tokens=settings.LLM_MAX_TOKENS)
+    )
+
     # 1. Get Data
     examples = await fetch_training_examples()
 
     if not examples:
-        print("No training data found. skipping training.")
+        print("No positive training data found. Skipping training.")
         return
 
     # 2. Train
@@ -160,6 +194,9 @@ async def main():
         compiled_scorer = train_scorer(examples)
 
         # 3. Save
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+
         compiled_scorer.save(OUTPUT_PATH)
         print(f"Optimized Scorer saved to {OUTPUT_PATH}")
 

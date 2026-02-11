@@ -7,6 +7,7 @@ export interface Settings {
   llm_model: string
   llm_temperature: number
   llm_temperature_generation: number
+  scraper_message_limit: number
   linkedin_email: string
   linkedin_password_set: boolean
   smtp_host: string
@@ -21,6 +22,7 @@ export interface UpdateSettingsRequest {
   llm_model?: string
   llm_temperature?: number
   llm_temperature_generation?: number
+  scraper_message_limit?: number
   linkedin_email?: string
   linkedin_password?: string
   smtp_host?: string

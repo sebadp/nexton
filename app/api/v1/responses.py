@@ -38,6 +38,8 @@ class ResponseData(BaseModel):
     original_response: str
     edited_response: str | None = None
     final_response: str | None = None
+    feedback_score: int | None = None
+    feedback_notes: str | None = None
     status: str
     approved_at: str | None = None
     declined_at: str | None = None
@@ -151,6 +153,59 @@ async def approve_response(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to approve response",
+        ) from e
+
+
+class ResponseFeedbackRequest(BaseModel):
+    """Request to update response feedback."""
+
+    feedback_score: int
+    feedback_notes: str | None = None
+
+
+@router.patch(
+    "/{response_id}/feedback", response_model=ResponseData, status_code=status.HTTP_200_OK
+)
+async def update_response_feedback(
+    response_id: int,
+    request: ResponseFeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+    repository: PendingResponseRepository = Depends(get_pending_response_repository),
+):
+    """
+    Update feedback for a response.
+
+    Args:
+        response_id: Response ID
+        request: Feedback request
+        db: Database session
+        repository: Response repository
+
+    Returns:
+        Updated response data
+    """
+    logger.info("updating_response_feedback", response_id=response_id, score=request.feedback_score)
+
+    try:
+        updated_response = await repository.update_feedback(
+            response_id, request.feedback_score, request.feedback_notes
+        )
+
+        if not updated_response:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Response {response_id} not found",
+            )
+
+        return ResponseData(**updated_response.to_dict())
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("response_feedback_update_failed", response_id=response_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update response feedback",
         ) from e
 
 

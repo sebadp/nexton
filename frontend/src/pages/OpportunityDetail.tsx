@@ -10,8 +10,16 @@ import {
   User,
   MessageSquare,
   Trash2,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react"
-import { useOpportunity, useDeleteOpportunity, useResponse } from "@/hooks"
+import {
+  useOpportunity,
+  useDeleteOpportunity,
+  useResponse,
+  useUpdateOpportunity,
+  useUpdateResponseFeedback,
+} from "@/hooks"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -46,10 +54,37 @@ export default function OpportunityDetail() {
   const { data: opportunity, isLoading } = useOpportunity(Number(id))
   const { data: response } = useResponse(Number(id))
   const deleteMutation = useDeleteOpportunity()
+  const updateMutation = useUpdateOpportunity()
 
   const handleDelete = async () => {
     await deleteMutation.mutateAsync(Number(id))
     navigate("/opportunities")
+  }
+
+  const handleFeedback = async (score: number) => {
+    if (!opportunity) return
+
+    // If clicking the same score, toggle it off (reset to 0/null)
+    const newScore = opportunity.feedback_score === score ? 0 : score
+
+    await updateMutation.mutateAsync({
+      id: opportunity.id,
+      data: { feedback_score: newScore }
+    })
+  }
+
+  const updateResponseFeedbackMutation = useUpdateResponseFeedback()
+
+  const handleResponseFeedback = async (score: number) => {
+    if (!response) return
+
+    // If clicking the same score, toggle it off (reset to 0)
+    const newScore = response.feedback_score === score ? 0 : score
+
+    await updateResponseFeedbackMutation.mutateAsync({
+      responseId: response.id,
+      feedback: { feedback_score: newScore }
+    })
   }
 
   if (isLoading) {
@@ -174,10 +209,33 @@ export default function OpportunityDetail() {
           )}
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle>Details</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground mr-2">Was this analysis helpful?</span>
+                <Button
+                  variant={opportunity.feedback_score === 1 ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => handleFeedback(1)}
+                  disabled={updateMutation.isPending}
+                >
+                  <ThumbsUp className="h-4 w-4" />
+                  <span className="sr-only">Helpful</span>
+                </Button>
+                <Button
+                  variant={opportunity.feedback_score === -1 ? "destructive" : "outline"}
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => handleFeedback(-1)}
+                  disabled={updateMutation.isPending}
+                >
+                  <ThumbsDown className="h-4 w-4" />
+                  <span className="sr-only">Not helpful</span>
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground" />
@@ -252,6 +310,8 @@ export default function OpportunityDetail() {
             </CardContent>
           </Card>
 
+
+
           {(opportunity.ai_response || response) && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -259,19 +319,45 @@ export default function OpportunityDetail() {
                   <MessageSquare className="h-5 w-5" />
                   AI Generated Response
                 </CardTitle>
-                {response && (
-                  <Badge
-                    variant={
-                      response.status === "approved"
-                        ? "success"
-                        : response.status === "declined"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {response.status}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {response && (
+                    <>
+                      <div className="flex items-center gap-1 mr-2">
+                        <Button
+                          variant={response.feedback_score === 1 ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleResponseFeedback(1)}
+                          disabled={updateResponseFeedbackMutation.isPending}
+                        >
+                          <ThumbsUp className="h-4 w-4" />
+                          <span className="sr-only">Good Response</span>
+                        </Button>
+                        <Button
+                          variant={response.feedback_score === -1 ? "destructive" : "outline"}
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleResponseFeedback(-1)}
+                          disabled={updateResponseFeedbackMutation.isPending}
+                        >
+                          <ThumbsDown className="h-4 w-4" />
+                          <span className="sr-only">Bad Response</span>
+                        </Button>
+                      </div>
+                      <Badge
+                        variant={
+                          response.status === "approved"
+                            ? "success"
+                            : response.status === "declined"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {response.status}
+                      </Badge>
+                    </>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm">

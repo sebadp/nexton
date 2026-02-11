@@ -94,6 +94,25 @@ class OpportunityPipeline(dspy.Module):
         Raises:
             PipelineError: If pipeline execution fails
         """
+        # Retry logic for transient errors (e.g. API timeouts, rate limits)
+        # Note: We are not wrapping the whole method to avoid side effects on DB/Logging
+        # Ideally we would wrap internal calls, but for now we rely on internal retries or
+        # handling within the Called modules.
+
+        # Explicitly cast return type because @observe decorator can obscure it (Mypy error)
+        return cast(
+            OpportunityResult, self._forward_impl(message, recruiter_name, profile, on_progress)
+        )
+
+    @observe(name="dspy.pipeline.forward_impl")
+    def _forward_impl(
+        self,
+        message: str,
+        recruiter_name: str,
+        profile: CandidateProfile,
+        on_progress: Callable[[str, dict], None] | None = None,
+    ) -> OpportunityResult:
+        """Implementation of forward with logic."""
         start_time = time.time()
 
         logger.info(
@@ -463,7 +482,11 @@ def create_lm(
         )
     elif provider_type == "openai":
         if not settings.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
+            logger.warning(
+                "missing_openai_api_key",
+                message="OPENAI_API_KEY is not set. OpenAI calls will fail.",
+            )
+            # We don't raise here to allow app startup, but calls will fail later if not fixed
 
         model_string = f"openai/{model_name}"
         return dspy.LM(
@@ -473,7 +496,10 @@ def create_lm(
         )
     elif provider_type == "anthropic":
         if not settings.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY is required for Anthropic provider")
+            logger.warning(
+                "missing_anthropic_api_key",
+                message="ANTHROPIC_API_KEY is not set. Anthropic calls will fail.",
+            )
 
         model_string = f"anthropic/{model_name}"
         return dspy.LM(
@@ -502,6 +528,9 @@ def configure_dspy(
             "dspy_configured_successfully",
             extra={
                 "provider": lm.model,
+                "model": model_name or settings.LLM_MODEL,
+                "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
+                "max_tokens": max_tokens or settings.LLM_MAX_TOKENS,
             },
         )
 
