@@ -39,15 +39,12 @@ job_search_status:
   currently_employed: true
   actively_looking: true
   urgency: selective
-  situation: 'Currently employed but open to exceptional opportunities.
-
-    Only considering roles with 4-day work week.
+  situation: '
 
     Focused on AI/ML engineering positions with strong technical teams.
 
     '
   must_have:
-  - 4-day work week (mandatory)
   - Remote-first company
   - Focus on AI/ML projects
   - Senior or Staff level position
@@ -60,5 +57,4 @@ job_search_status:
   - Agencies or consulting firms
   - Cryptocurrency/blockchain only
   - Early-stage startups (pre-seed)
-  - 5-day work week requirement
   - Full-time on-site

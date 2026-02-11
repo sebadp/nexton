@@ -24,6 +24,8 @@ const settingsSchema = z.object({
   llm_provider: z.string(),
   llm_model: z.string(),
   llm_temperature: z.number().min(0).max(2),
+  llm_temperature_generation: z.number().min(0).max(2),
+  scraper_message_limit: z.number().min(1).max(100),
   linkedin_email: z.string().email().or(z.literal("")),
   linkedin_password: z.string().optional(),
   smtp_host: z.string(),
@@ -44,7 +46,9 @@ export default function Settings() {
     defaultValues: {
       llm_provider: "ollama",
       llm_model: "llama2",
-      llm_temperature: 0.7,
+      llm_temperature: 0.0,
+      llm_temperature_generation: 0.7,
+      scraper_message_limit: 20,
       linkedin_email: "",
       linkedin_password: "",
       smtp_host: "localhost",
@@ -60,6 +64,8 @@ export default function Settings() {
         llm_provider: settings.llm_provider,
         llm_model: settings.llm_model,
         llm_temperature: settings.llm_temperature,
+        llm_temperature_generation: settings.llm_temperature_generation,
+        scraper_message_limit: settings.scraper_message_limit,
         linkedin_email: settings.linkedin_email,
         linkedin_password: "",
         smtp_host: settings.smtp_host,
@@ -81,6 +87,12 @@ export default function Settings() {
     }
     if (data.llm_temperature !== settings?.llm_temperature) {
       updateData.llm_temperature = data.llm_temperature
+    }
+    if (data.llm_temperature_generation !== settings?.llm_temperature_generation) {
+      updateData.llm_temperature_generation = data.llm_temperature_generation
+    }
+    if (data.scraper_message_limit !== settings?.scraper_message_limit) {
+      updateData.scraper_message_limit = data.scraper_message_limit
     }
     if (data.linkedin_email !== settings?.linkedin_email) {
       updateData.linkedin_email = data.linkedin_email
@@ -183,7 +195,7 @@ export default function Settings() {
 
             <div className="space-y-2">
               <Label htmlFor="llm_temperature">
-                Temperature ({form.watch("llm_temperature")})
+                Analysis Temperature (Strict) - {form.watch("llm_temperature")}
               </Label>
               <Input
                 id="llm_temperature"
@@ -193,6 +205,26 @@ export default function Settings() {
                 step="0.1"
                 {...form.register("llm_temperature", { valueAsNumber: true })}
               />
+              <p className="text-xs text-muted-foreground">
+                Controls data extraction and scoring. Keep low (0.0 - 0.2) for accuracy.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="llm_temperature_generation">
+                Generation Temperature (Creative) - {form.watch("llm_temperature_generation")}
+              </Label>
+              <Input
+                id="llm_temperature_generation"
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                {...form.register("llm_temperature_generation", { valueAsNumber: true })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls response drafting. Increase (0.7 - 1.0) for more natural, less robotic replies.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -205,6 +237,22 @@ export default function Settings() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="scraper_message_limit">
+                Scraper Message Limit - {form.watch("scraper_message_limit")}
+              </Label>
+              <Input
+                id="scraper_message_limit"
+                type="number"
+                min="1"
+                max="100"
+                {...form.register("scraper_message_limit", { valueAsNumber: true })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Number of messages to scrape per run (1-100).
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="linkedin_email">Email</Label>
               <Input

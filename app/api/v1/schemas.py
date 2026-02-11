@@ -45,6 +45,8 @@ class OpportunityUpdate(BaseModel):
 
     status: str | None = Field(None, max_length=50)
     notes: str | None = None
+    feedback_score: int | None = Field(None, ge=-1, le=1)
+    feedback_notes: str | None = None
 
     class Config:
         json_schema_extra = {
@@ -117,6 +119,16 @@ class OpportunityResponse(BaseModel):
     follow_up_analysis: dict[str, Any] | None = Field(
         None,
         description="Analysis for follow-up messages (question_type, can_auto_respond, etc.)",
+    )
+
+    # Feedback Loop (NEW)
+    feedback_score: int | None = Field(
+        None,
+        description="1 = Like (Correct), -1 = Dislike (Incorrect), 0 = Neutral",
+    )
+    feedback_notes: str | None = Field(
+        None,
+        description="User comments explaining the feedback",
     )
 
     # Metadata

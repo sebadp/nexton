@@ -72,6 +72,8 @@ export interface Opportunity {
   manual_review_reason: string | null
   hard_filter_results: HardFilterResults | null
   follow_up_analysis: FollowUpAnalysis | null
+  feedback_score: number | null
+  feedback_notes: string | null
 }
 
 export interface OpportunityListResponse {
@@ -116,4 +118,5 @@ export interface CreateOpportunityRequest {
 export interface UpdateOpportunityRequest {
   status?: OpportunityStatus
   notes?: string
+  feedback_score?: number
 }

@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "ollama"  # openai, anthropic, ollama
     LLM_MODEL: str = "llama2"
     LLM_MAX_TOKENS: int = 500
-    LLM_TEMPERATURE: float = 0.7
+    LLM_TEMPERATURE: float = 0.0
+    LLM_TEMPERATURE_GENERATION: float = 0.7
     LLM_TIMEOUT: int = 30
 
     # OpenAI
@@ -97,6 +98,7 @@ class Settings(BaseSettings):
     SCRAPER_MAX_RETRIES: int = 3
     SCRAPER_RATE_LIMIT: int = 10
     SCRAPER_COOLDOWN: int = 300
+    SCRAPER_MESSAGE_LIMIT: int = 20
 
     # User Profile
     PROFILE_PATH: str = "config/profile.yaml"

@@ -10,11 +10,21 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
 
+from app.core.config import settings
 from app.database.base import Base
 from app.database.models import Opportunity
 from app.main import app
+
+# Disable observability in tests to prevent:
+# 1. Spamming Langfuse with test traces
+# 2. slowing down tests with network calls
+# 3. Requiring API keys in CI/CD environment
+settings.OTEL_ENABLED = False
+settings.LANGFUSE_SECRET_KEY = None
+settings.DATABASE_URL = (
+    "sqlite+aiosqlite:///:memory:"  # Force valid URL format for validation logic if needed
+)
 
 # ============================================================================
 # Database Fixtures
@@ -33,10 +43,12 @@ def event_loop() -> Generator:
 async def test_engine():
     """Create test database engine."""
     # Use in-memory SQLite for tests
+    from sqlalchemy.pool import StaticPool
+
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
-        poolclass=NullPool,
+        poolclass=StaticPool,
     )
 
     async with engine.begin() as conn:
@@ -63,10 +75,55 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
+async def client(
+    db_session: AsyncSession, mock_pipeline: Mock
+) -> AsyncGenerator[AsyncClient, None]:
     """Create async HTTP client for API tests."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        yield client
+    from unittest.mock import AsyncMock, patch
+
+    from app.database.dependencies import get_db
+
+    # Override dependency
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    from httpx import ASGITransport
+
+    transport = ASGITransport(app=app)
+
+    # Patch database initialization in lifespan and pipeline/profile dependencies
+    with patch("app.main.init_db", new_callable=AsyncMock), patch(
+        "app.main.close_db", new_callable=AsyncMock
+    ), patch("app.api.v1.opportunities.get_pipeline") as mock_get_pipeline, patch(
+        "app.api.v1.opportunities.get_profile"
+    ) as mock_get_profile:
+        # Configure mocks
+        from app.dspy_modules.models import CandidateProfile
+
+        mock_get_pipeline.return_value = mock_pipeline
+
+        # Create profile from sample data
+        profile_data = {
+            "name": "Test User",
+            "preferred_technologies": ["Python", "FastAPI"],
+            "years_of_experience": 5,
+            "current_seniority": "Senior",
+            "minimum_salary_usd": 60000,
+            "ideal_salary_usd": 120000,
+            "preferred_remote_policy": "Remote",
+            "preferred_locations": ["Argentina"],
+            "preferred_company_size": "Mid-size",
+            "industry_preferences": ["Technology"],
+            "open_to_relocation": False,
+            "looking_for_change": True,
+            "notes": "Test notes",
+            "id": 1,
+        }
+        mock_get_profile.return_value = CandidateProfile(**profile_data)
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+
+    app.dependency_overrides.clear()
 
 
 # ============================================================================
@@ -118,9 +175,13 @@ def mock_pipeline():
         ),
         scoring=ScoringResult(
             tech_stack_score=35,
+            tech_stack_reasoning="Good match",
             salary_score=25,
+            salary_reasoning="Above minimum",
             seniority_score=18,
+            seniority_reasoning="Matches request",
             company_score=8,
+            company_reasoning="Good company",
         ),
         ai_response="Test response",
         processing_time_ms=1000,

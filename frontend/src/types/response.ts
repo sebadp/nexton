@@ -14,10 +14,17 @@ export interface PendingResponse {
   send_attempts: number
   created_at: string
   updated_at: string
+  feedback_score: number | null
+  feedback_notes: string | null
 }
 
 export interface ApproveResponseRequest {
   edited_response?: string
+}
+
+export interface UpdateResponseFeedbackRequest {
+  feedback_score: number
+  feedback_notes?: string
 }
 
 export interface PendingResponseWithOpportunity extends PendingResponse {

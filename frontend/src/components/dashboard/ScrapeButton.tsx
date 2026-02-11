@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useScrapingStatus, useScrapingStream, toast } from "@/hooks"
+import { useScrapingStatus, useScrapingStream, useSettings, toast } from "@/hooks"
 import { formatDateTime } from "@/lib/utils"
 import { ScrapingProgress } from "./ScrapingProgress"
 
@@ -19,12 +19,13 @@ export function ScrapeButton() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const { data: status, isLoading: statusLoading, refetch } = useScrapingStatus()
   const { events, isStreaming, startStream, reset } = useScrapingStream()
+  const { data: settings } = useSettings()
 
   const isRunning = (status?.is_running ?? false) || isStreaming
 
   const handleScrape = () => {
     reset()
-    startStream(20, true)
+    startStream(undefined, true)
   }
 
   const handleDialogChange = (open: boolean) => {
@@ -134,7 +135,7 @@ export function ScrapeButton() {
                     <div className="py-4">
                       <p className="text-sm text-muted-foreground">The scan will:</p>
                       <ul className="mt-2 list-inside list-disc text-sm text-muted-foreground">
-                        <li>Fetch up to 20 unread messages</li>
+                        <li>Fetch up to {settings?.scraper_message_limit || 20} unread messages</li>
                         <li>Extract company, role, salary, and tech stack</li>
                         <li>Calculate match scores based on your profile</li>
                         <li>Generate AI responses for each opportunity</li>

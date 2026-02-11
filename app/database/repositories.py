@@ -600,6 +600,32 @@ class PendingResponseRepository(BaseRepository):
                 details={"error": str(e)},
             ) from e
 
+    async def update_feedback(
+        self, response_id: int, feedback_score: int, feedback_notes: str | None = None
+    ) -> PendingResponse | None:
+        """
+        Update feedback for a response.
+
+        Args:
+            response_id: Response ID
+            feedback_score: 1 (Good), -1 (Bad), 0 (Neutral)
+            feedback_notes: Optional notes
+
+        Returns:
+            Updated pending response or None
+        """
+        response = await self.get_by_id(response_id)
+        if not response:
+            return None
+
+        response.feedback_score = feedback_score
+        if feedback_notes is not None:
+            response.feedback_notes = feedback_notes
+
+        await self.session.commit()
+        await self.session.refresh(response)
+        return response
+
     async def update(self, response_id: int, **kwargs) -> PendingResponse | None:
         """
         Update pending response.

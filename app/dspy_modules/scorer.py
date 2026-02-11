@@ -35,6 +35,18 @@ class Scorer(dspy.Module):
         super().__init__()
         self.score = dspy.ChainOfThought(ScoringSignature)
 
+        # Load compiled settings if available
+        import os
+
+        settings_path = "app/dspy_modules/settings/scorer_compiled.json"
+        if os.path.exists(settings_path):
+            try:
+                self.load(settings_path)
+                logger.info("loaded_compiled_scorer", path=settings_path)
+            except Exception as e:
+                logger.error("failed_to_load_compiled_scorer", error=str(e))
+                # Continue with default (unoptimized) module
+
     @observe(name="dspy.scorer.forward")
     def forward(
         self,
